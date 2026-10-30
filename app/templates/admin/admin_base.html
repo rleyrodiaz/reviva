@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="topbar">
+    <a class="brand" href="/admin/familias">
+        <span class="mark">C</span>
+        <strong>Cuaderno de Guiones</strong>
+    </a>
+    <div class="who">
+        {% if user.es_superadmin %}
+        <nav class="topnav">
+            <a href="/admin/activity-log">Activity log</a>
+            <a href="/admin/settings">Settings</a>
+        </nav>
+        {% endif %}
+        <span>{{ user.nombre }}</span>
+        <form method="post" action="/logout"><button type="submit">Salir</button></form>
+    </div>
+</div>
+<div class="contenido">
+    {% block contenido %}{% endblock %}
+</div>
+
+<dialog id="dialog-confirmar">
+    <h2>¿Confirmás?</h2>
+    <p id="dialog-confirmar-texto"></p>
+    <div class="modal-actions">
+        <button type="button" class="btn quiet" id="dialog-confirmar-cancelar">Cancelar</button>
+        <button type="button" class="btn danger" id="dialog-confirmar-aceptar">Sí, continuar</button>
+    </div>
+</dialog>
+
+<dialog id="dialog-prompt">
+    <h2>Conectar guiones</h2>
+    <label id="dialog-prompt-titulo" for="dialog-prompt-input">Texto</label>
+    <input type="text" id="dialog-prompt-input">
+    <div class="modal-actions">
+        <button type="button" class="btn quiet" id="dialog-prompt-cancelar">Cancelar</button>
+        <button type="button" class="btn" id="dialog-prompt-aceptar">Aceptar</button>
+    </div>
+</dialog>
+
+<dialog id="dialog-aviso">
+    <h2>Aviso</h2>
+    <p id="dialog-aviso-texto"></p>
+    <div class="modal-actions">
+        <button type="button" class="btn" id="dialog-aviso-cerrar">Entendido</button>
+    </div>
+</dialog>
+<script src="/static/js/dialogos.js?v={{ static_version('js/dialogos.js') }}"></script>
+{% endblock %}

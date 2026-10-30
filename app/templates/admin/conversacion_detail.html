@@ -1,0 +1,138 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}{{ conversacion.nombre }}{% endblock %}
+{% block contenido %}
+{% set base_url = "/admin/familias/" ~ familia_id ~ "/personajes/" ~ personaje.id ~ "/conversaciones/" ~ conversacion.id %}
+<p><a href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}">&larr; {{ personaje.nombre }}</a></p>
+<div class="card-header-row">
+    <h1>{{ conversacion.nombre }}</h1>
+    <div style="display:flex; gap:8px;">
+        <button class="btn chico secundario" type="button" onclick="document.getElementById('modal-traer-guion').showModal()">Traer guion de otra conversación</button>
+        <button class="btn chico" type="button" onclick="document.getElementById('modal-nuevo-guion').showModal()">+ Nuevo guion</button>
+    </div>
+</div>
+
+<dialog id="modal-traer-guion">
+    <h2>Traer guion de otra conversación</h2>
+    <p class="hint">Trae una copia (con sus opciones/ramas, sin destino) a esta conversación. El original no se toca.</p>
+    <form method="post"
+          action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ conversacion.id }}/guiones/importar">
+        <label>Guion de origen</label>
+        <select name="guion_origen_id" required>
+            <option value="">— elegir guion —</option>
+            {% for g in otros_guiones %}
+            <option value="{{ g.id }}">
+                {{ g.personaje.nombre }} / {{ g.conversacion.nombre }} — {{ g.texto_mensaje[:50] }}
+            </option>
+            {% endfor %}
+        </select>
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-traer-guion').close()">Cancelar</button>
+            <button class="btn" type="submit">Traer copia</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="modal-nuevo-guion">
+    <h2>Nuevo guion</h2>
+    <form method="post"
+          action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ conversacion.id }}/guiones">
+        <input type="hidden" name="pos_x" id="modal-nuevo-guion-pos-x">
+        <input type="hidden" name="pos_y" id="modal-nuevo-guion-pos-y">
+        <label>Mensaje</label>
+        <textarea name="texto_mensaje" rows="2" required></textarea>
+        <label>Tipo de respuesta esperada</label>
+        <select name="tipo_respuesta">
+            {% for t in tipos_respuesta %}
+            <option value="{{ t.value }}">{{ t.value }}</option>
+            {% endfor %}
+        </select>
+        <label>Nodo padre (opcional, solo referencia visual)</label>
+        <select name="nodo_padre_id">
+            <option value="">— ninguno —</option>
+            {% for g in guiones %}
+            <option value="{{ g.id }}">#{{ g.id }} — {{ g.texto_mensaje[:40] }}</option>
+            {% endfor %}
+        </select>
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-nuevo-guion').close()">Cancelar</button>
+            <button class="btn" type="submit">Crear guion</button>
+        </div>
+    </form>
+</dialog>
+
+<div class="card">
+    <h2>Conversación</h2>
+    {% if guion_entrada %}
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+        <label style="margin:0;">Estado</label>
+        <span class="stamp {{ guion_entrada.estado.value }}">
+            {% if guion_entrada.modo_envio.value == "automatico" and guion_entrada.estado.value == "borrador" %}
+            por enviarse
+            {% else %}
+            {{ guion_entrada.estado.value.replace("_", " ") }}
+            {% endif %}
+        </span>
+    </div>
+    <form method="post" action="{{ base_url }}/configuracion" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+            <label>Fecha y hora programada</label>
+            <input type="datetime-local" name="fecha_programada" id="conv-fecha" value="{{ fecha_entrada_valor }}" required>
+        </div>
+        <div style="flex:1; min-width:160px;">
+            <label>Modo de envío</label>
+            <select name="modo_envio" id="conv-modo">
+                {% for m in modos_envio %}
+                <option value="{{ m.value }}" {% if m == guion_entrada.modo_envio %}selected{% endif %}>{{ m.value }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn chico" type="submit">Guardar</button>
+        <button class="btn chico secundario" type="submit" name="reabrir" value="true"
+                {% if guion_entrada.modo_envio.value == "automatico" and guion_entrada.estado.value == "borrador" %}
+                disabled title="Ya está en borrador, no hace falta reabrir"
+                {% endif %}>
+            Reabrir
+        </button>
+    </form>
+    <script>
+    (function () {
+        var modo = document.getElementById("conv-modo");
+        var fecha = document.getElementById("conv-fecha");
+        if (!modo || !fecha) return;
+        function actualizar() {
+            var esManual = modo.value === "manual";
+            fecha.readOnly = esManual;
+            fecha.classList.toggle("campo-apagado", esManual);
+            fecha.title = esManual ? "En modo manual la fecha no participa del envío." : "";
+        }
+        modo.addEventListener("change", actualizar);
+        actualizar();
+    })();
+    </script>
+    <p class="hint">Define si la conversación arranca con tu aprobación (manual) o sola, en la fecha elegida
+        (automático). En manual la fecha no participa de nada: al guardar, el guion de entrada pasa derecho a
+        la bandeja de aprobación. Una vez que arranca, el resto de los guiones de la cadena fluyen solos, sin
+        pasar de nuevo por la bandeja.
+        {% if guion_entrada.modo_envio.value == "automatico" and guion_entrada.estado.value != "borrador" %}
+        "Guardar" solo deja la fecha lista para la próxima vez; "Reabrir" además vuelve el guion de entrada a
+        borrador ya mismo con esa fecha.
+        {% endif %}
+    </p>
+    {% else %}
+    <p class="hint">Todavía no hay un guion de entrada: creá el primero en el mapa de abajo y acá vas a poder
+        elegir cuándo arranca y si es manual o automática.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Mapa de la conversación</h2>
+    <p class="hint">
+        Arrastrá para mover, tirá de la esquina para agrandar, doble click en un espacio vacío para crear un guion
+        nuevo, click en el texto para tipearlo, y arrastrá desde el punto de abajo de un guion hasta otro para
+        conectarlos. Los rombos marcan dónde se abre en más de un camino.
+    </p>
+    <div id="diagrama-conversacion" data-base-url="{{ base_url }}"></div>
+</div>
+<script type="application/json" id="diagrama-datos">{{ diagrama_json|safe }}</script>
+<script src="/static/js/diagrama.js?v={{ static_version('js/diagrama.js') }}"></script>
+{% endblock %}

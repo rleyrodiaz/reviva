@@ -1,0 +1,99 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}{{ personaje.nombre }}{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia_id }}">&larr; volver</a></p>
+<h1>{{ personaje.nombre }}</h1>
+<p class="hint">{{ personaje.relacion_con_paciente or "" }} — {{ personaje.descripcion or "" }}</p>
+
+<div class="mode-tabs">
+    <a class="mode-tab active" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}">Guionadas</a>
+    <a class="mode-tab" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias">Historias</a>
+</div>
+
+<div class="row-2col">
+    <div class="col-narrow">
+        <div class="card">
+            <details>
+                <summary>Editar personaje</summary>
+                <form method="post"
+                      action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/editar"
+                      style="margin-top:12px;">
+                    <label>Nombre</label>
+                    <input type="text" name="nombre" value="{{ personaje.nombre }}" required>
+                    <label>Relación con el paciente</label>
+                    <input type="text" name="relacion_con_paciente" value="{{ personaje.relacion_con_paciente or '' }}">
+                    <label>Foto (URL)</label>
+                    <input type="text" name="foto" value="{{ personaje.foto or '' }}" placeholder="/static/images/archivo.jpg">
+                    <p class="hint">Si la imagen está en tu PC, copiala a <code>app/static/images/</code> y poné acá <code>/static/images/archivo.jpg</code>.</p>
+                    <label>Descripción / historia compartida</label>
+                    <textarea name="descripcion" rows="2">{{ personaje.descripcion or '' }}</textarea>
+                    <label>Tono de escritura</label>
+                    <textarea name="tono_escritura" rows="2">{{ personaje.tono_escritura or '' }}</textarea>
+                    <button class="btn" type="submit">Guardar cambios</button>
+                </form>
+            </details>
+        </div>
+    </div>
+
+    <div class="col-wide">
+        <div class="card">
+            <div class="card-header-row">
+                <h2>Conversaciones ({{ conversaciones|length }})</h2>
+                <button class="btn chico" type="button" onclick="document.getElementById('modal-nueva-conversacion').showModal()">+ Nueva conversación</button>
+            </div>
+            {% for c in conversaciones %}
+            <div class="conv-row">
+                <div class="conv-icon">{{ c.guiones|length }}</div>
+                <div class="conv-main">
+                    <div class="name">
+                        <a href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}">{{ c.nombre }}</a>
+                    </div>
+                    <div class="meta">creada {{ c.creada_en.strftime("%d/%m/%Y") }}</div>
+                </div>
+                <div class="conv-actions">
+                    <a class="btn chico secundario" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}">Abrir</a>
+                    <details>
+                        <summary>Renombrar</summary>
+                        <form method="post"
+                              action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}/editar"
+                              style="margin-top:8px; display:flex; gap:6px;">
+                            <input type="text" name="nombre" value="{{ c.nombre }}" required style="flex:1">
+                            <button class="btn chico" type="submit">Guardar</button>
+                        </form>
+                    </details>
+                    <details>
+                        <summary>Reabrir</summary>
+                        <form method="post"
+                              action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}/reabrir"
+                              style="margin-top:8px; display:flex; gap:6px;">
+                            <input type="datetime-local" name="fecha_programada" required>
+                            <button class="btn chico" type="submit">Reabrir</button>
+                        </form>
+                        <p class="hint">Reactiva el/los guion(es) de entrada con esa fecha.</p>
+                    </details>
+                    <form method="post"
+                          action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}/borrar"
+                          data-confirm="¿Borrar esta conversación completa, con todos sus guiones, opciones y ramas?">
+                        <button class="btn chico danger" type="submit">Borrar</button>
+                    </form>
+                </div>
+            </div>
+            {% else %}
+            <p class="hint">Todavía no hay conversaciones creadas.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<dialog id="modal-nueva-conversacion">
+    <h2>Nueva conversación</h2>
+    <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones">
+        <label>Nombre</label>
+        <input type="text" name="nombre" placeholder="Ej: Recuerdos de Mar del Plata" required>
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-nueva-conversacion').close()">Cancelar</button>
+            <button class="btn" type="submit">Crear conversación</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="{{ paciente.tema.value }}" data-font-size="{{ paciente.tamano_fuente.value }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp</title>
+    <link rel="stylesheet" href="/static/css/chat.css?v={{ static_version('css/chat.css') }}">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="{{ '#202c33' if paciente.tema.value == 'oscuro' else '#075e54' }}">
+</head>
+<body class="chat-body" data-paciente-id="{{ paciente.id }}" data-push-habilitado="{{ 'true' if paciente.push_habilitado else 'false' }}">
+<div class="chat-header">
+    <span class="chat-header-title">WhatsApp</span>
+    <div class="chat-header-icons">
+        <span class="icon-btn" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 5L20.5 19l-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"/></svg>
+        </span>
+        <span class="icon-btn" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>
+        </span>
+    </div>
+</div>
+<div class="contact-list">
+    {% for c in contactos %}
+    <a class="contact-row" href="/chat/{{ paciente.id }}/{{ c.personaje.id }}">
+        {% if c.personaje.foto %}
+        <img class="avatar" src="{{ c.personaje.foto }}" alt="{{ c.personaje.nombre }}">
+        {% else %}
+        <div class="avatar">{{ c.personaje.nombre[0] }}</div>
+        {% endif %}
+        <div class="contact-info">
+            <div class="contact-top-row">
+                <span class="contact-name">{{ c.personaje.nombre }}</span>
+                {% if c.ultimo_timestamp %}
+                <span class="contact-time">{{ c.ultimo_timestamp.strftime("%H:%M") }}</span>
+                {% endif %}
+            </div>
+            <div class="contact-bottom-row">
+                <span class="contact-preview">{{ c.ultimo_texto or "No hay mensajes nuevos" }}</span>
+                {% if c.esperando_respuesta %}<span class="badge-nuevo">1</span>{% endif %}
+            </div>
+        </div>
+    </a>
+    {% else %}
+    <p style="padding:20px; color:#667781;">Todavía no hay personajes configurados.</p>
+    {% endfor %}
+</div>
+<script src="/static/js/notificaciones.js?v={{ static_version('js/notificaciones.js') }}"></script>
+<script src="/static/js/push.js?v={{ static_version('js/push.js') }}"></script>
+</body>
+</html>

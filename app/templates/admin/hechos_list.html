@@ -1,0 +1,81 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Hechos de familia{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia_id }}">&larr; volver</a></p>
+<h1>Hechos de familia</h1>
+<p class="hint">
+    Datos que el paciente contó durante alguna Historia y que podrían servir en otras — nunca se usan solos, tenés
+    que aprobarlos primero. Solo se rescata lo que dijo el paciente, nunca lo que dijo el personaje.
+</p>
+
+<div class="card">
+    <h2>Pendientes ({{ pendientes|length }})</h2>
+    {% if not pendientes %}
+    <p class="hint">No hay nada nuevo para revisar.</p>
+    {% endif %}
+    {% for h in pendientes %}
+    <div class="inbox-card">
+        <div class="inbox-top">
+            {% if h.origen_sesion %}
+            <span class="when">
+                de "{{ h.origen_sesion.historia.titulo }}" ({{ h.origen_sesion.historia.personaje.nombre }}) ·
+                {{ h.creado_en.strftime("%d/%m/%Y") }}
+            </span>
+            {% else %}
+            <span class="when">{{ h.creado_en.strftime("%d/%m/%Y") }}</span>
+            {% endif %}
+        </div>
+        <p style="font-family:'Fraunces'; font-size:15.5px; margin:0 0 12px;">{{ h.texto }}</p>
+        <div class="inbox-foot">
+            <form method="post" action="/admin/familias/{{ familia_id }}/hechos/{{ h.id }}/descartar">
+                <button class="btn quiet" type="submit">Descartar</button>
+            </form>
+            <form method="post" action="/admin/familias/{{ familia_id }}/hechos/{{ h.id }}/validar">
+                <button class="btn" type="submit">Validar</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <h2>Validados ({{ validados|length }})</h2>
+    <p class="hint">Estos se le pasan a la IA en el prompt de cualquier historia de esta familia, si vienen al caso.</p>
+    {% for h in validados %}
+    <div class="conv-row">
+        <div class="conv-main">
+            <div class="name">{{ h.texto }}</div>
+            <div class="meta">
+                {% if h.origen_sesion %}de "{{ h.origen_sesion.historia.titulo }}" · {% endif %}
+                validado
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p class="hint">Todavía no hay ninguno validado.</p>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <h2>Descartados ({{ descartados|length }})</h2>
+    <p class="hint">No se usan en ningún prompt, pero quedan guardados acá por si hace falta revisarlos de nuevo.</p>
+    {% for h in descartados %}
+    <div class="conv-row">
+        <div class="conv-main">
+            <div class="name">{{ h.texto }}</div>
+            <div class="meta">
+                {% if h.origen_sesion %}de "{{ h.origen_sesion.historia.titulo }}" · {% endif %}
+                descartado
+            </div>
+        </div>
+        <div class="conv-actions">
+            <form method="post" action="/admin/familias/{{ familia_id }}/hechos/{{ h.id }}/reconsiderar">
+                <button class="btn chico secundario" type="submit">Reconsiderar</button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <p class="hint">Todavía no hay ninguno descartado.</p>
+    {% endfor %}
+</div>
+{% endblock %}

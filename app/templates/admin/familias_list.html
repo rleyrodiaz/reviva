@@ -1,0 +1,49 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Familias{% endblock %}
+{% block contenido %}
+<div class="card-header-row">
+    <h1>Familias</h1>
+    {% if user.es_superadmin %}
+    <button class="btn chico" type="button" onclick="document.getElementById('modal-nueva-familia').showModal()">+ Nueva familia</button>
+    {% endif %}
+</div>
+<div class="card">
+    {% if not familias %}
+    <p class="hint">Todavía no administrás ninguna familia.</p>
+    {% else %}
+    <table>
+        <tr><th>Nombre</th><th>Alta</th><th></th></tr>
+        {% for f in familias %}
+        <tr>
+            <td>{{ f.nombre }}</td>
+            <td>{{ f.fecha_alta.strftime("%d/%m/%Y") }}</td>
+            <td><a class="btn chico secundario" href="/admin/familias/{{ f.id }}">Entrar</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+</div>
+
+{% if user.es_superadmin %}
+<dialog id="modal-nueva-familia">
+    <h2>Nueva familia</h2>
+    <form method="post" action="/admin/familias">
+        <label>Nombre de la familia</label>
+        <input type="text" name="nombre_familia" placeholder="Ej: Familia Ruiz" required>
+        <label>Nombre del paciente</label>
+        <input type="text" name="nombre_paciente" placeholder="Ej: Alejandro" required>
+        <p class="hint">Administrador de esta familia (va a poder cargar personajes, guiones e historias). Si el email ya es de un admin de otra familia, se lo agrega ahí también en vez de crear una cuenta nueva.</p>
+        <label>Email</label>
+        <input type="email" name="admin_email" required>
+        <label>Nombre (solo si es un administrador nuevo)</label>
+        <input type="text" name="admin_nombre">
+        <label>Contraseña (solo si es un administrador nuevo)</label>
+        <input type="password" name="admin_password">
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-nueva-familia').close()">Cancelar</button>
+            <button class="btn" type="submit">Crear familia</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+{% endblock %}

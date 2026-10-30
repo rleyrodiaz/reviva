@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Secrets and local configurations
+.env
+.env.example
+vapid_private_key.pem
+
+# Temporary Office files
+~$*
+*.tmp
+
+# Databases
+*.db
+*.sqlite3
+
+# Logs / PIDs de correr el server local
+*.log
+server.pid
+.pytest_cache/
+
+*.xlsx
+*.csv
+*.docx

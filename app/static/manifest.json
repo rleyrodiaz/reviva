@@ -1,0 +1,9 @@
+{
+    "name": "Estimulación Cognitiva",
+    "short_name": "Chat",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#e5ddd5",
+    "theme_color": "#075e54",
+    "icons": []
+}

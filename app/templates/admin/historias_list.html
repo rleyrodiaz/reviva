@@ -1,0 +1,77 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Historias — {{ personaje.nombre }}{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}">&larr; {{ personaje.nombre }}</a></p>
+<h1>Historias de {{ personaje.nombre }}</h1>
+<p class="hint">
+    Un camino alternativo a armar guion por guion: cargás una historia real y la IA sostiene la charla en el
+    momento, en el tono de {{ personaje.nombre }}, pidiéndole al paciente que complete lo que falta en vez de
+    inventarlo.
+</p>
+
+<div class="mode-tabs">
+    <a class="mode-tab" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}">Guionadas</a>
+    <a class="mode-tab active" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias">Historias</a>
+</div>
+
+<div class="card">
+    <div class="card-header-row">
+        <h2>Historias ({{ historias|length }})</h2>
+        <button class="btn chico" type="button" onclick="document.getElementById('modal-nueva-historia').showModal()">+ Nueva historia</button>
+    </div>
+    <div class="folder-grid">
+        {% for h in historias %}
+        <div class="historia-card">
+            <div class="rel">{{ h.epoca or "" }}{% if h.epoca and h.lugar %} · {% endif %}{{ (h.lugar or "")|upper }}</div>
+            <h3>{{ h.titulo }}</h3>
+            {% if h.participantes %}
+            <div class="chipline">
+                {% for nombre in h.participantes.split(",") %}
+                <span class="chip">{{ nombre.strip() }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            <p class="historia-snippet">{{ h.contenido[:110] }}{% if h.contenido|length > 110 %}…{% endif %}</p>
+            <div class="facts">
+                ⏱ máx. {{ h.duracion_maxima_minutos }} min ·
+                {% if h.sesiones|length == 0 %}
+                <span class="stamp borrador" style="transform:none;">sin usar</span>
+                {% else %}
+                <span class="stamp enviado" style="transform:none;">usada {{ h.sesiones|length }} vez(es)</span>
+                {% endif %}
+            </div>
+            <div class="actions">
+                <a class="btn chico secundario" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ h.id }}">Abrir</a>
+            </div>
+        </div>
+        {% else %}
+        <p class="hint">Todavía no hay historias cargadas.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<dialog id="modal-nueva-historia">
+    <h2>Nueva historia</h2>
+    <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias" enctype="multipart/form-data">
+        <label>Título</label>
+        <input type="text" name="titulo" placeholder="Ej: El viaje al mar" required>
+        <label>Cuándo</label>
+        <input type="text" name="epoca" placeholder="1985, o &quot;diciembre, sin año exacto&quot;">
+        <label>Dónde</label>
+        <input type="text" name="lugar" placeholder="Mar del Plata">
+        <label>Quiénes estaban</label>
+        <input type="text" name="participantes" placeholder="papá, tío Beto">
+        <label>Importar desde un archivo (.docx o .txt)</label>
+        <input type="file" name="archivo" accept=".docx,.txt">
+        <p class="hint">Si subís un archivo, su texto va a completar "Lo que sabemos" (podés editarlo después igual).</p>
+        <label>Lo que sabemos (anécdotas y detalles sueltos)</label>
+        <textarea name="contenido" rows="5" placeholder="- Fuimos en el Renault celeste de papá&#10;- Alguien se mareó en la ruta, paramos tres veces&#10;- ..."></textarea>
+        <label>Tiempo máximo de charla (minutos)</label>
+        <input type="text" name="duracion_maxima_minutos" value="10">
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-nueva-historia').close()">Cancelar</button>
+            <button class="btn" type="submit">Crear historia</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Bandeja de aprobación{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia_id }}">&larr; volver</a></p>
+<div class="inbox-header">
+    <span class="count">{{ pendientes|length }} guion(es) esperando tu aprobación</span>
+</div>
+
+{% if not pendientes %}
+<div class="card"><p class="hint">No hay guiones esperando aprobación.</p></div>
+{% endif %}
+
+{% for g in pendientes %}
+<div class="inbox-card">
+    <div class="inbox-top">
+        <div class="avatar">{{ g.personaje.nombre[0] }}</div>
+        <span class="name">{{ g.personaje.nombre }}</span>
+        <span class="when">#{{ g.id }}</span>
+    </div>
+    <form method="post" action="/admin/familias/{{ familia_id }}/bandeja/{{ g.id }}/aprobar">
+        <textarea name="texto_mensaje" rows="2">{{ g.texto_mensaje }}</textarea>
+        <div class="inbox-foot">
+            <button class="btn" type="submit">Aprobar y enviar ahora</button>
+        </div>
+    </form>
+    <form method="post" action="/admin/familias/{{ familia_id }}/bandeja/{{ g.id }}/desactivar"
+          style="margin-top:8px;"
+          data-confirm="¿Desactivar este envío? No se manda y vuelve a borrador — queda a tu criterio cuándo reabrirlo.">
+        <button class="btn chico quiet" type="submit">Desactivar</button>
+    </form>
+</div>
+{% endfor %}
+{% endblock %}

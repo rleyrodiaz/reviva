@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Cuaderno de Guiones{% endblock %}
+{% block body %}
+<div class="login-wrap">
+    <div class="login-panel">
+        <div class="login-art">
+            <svg viewBox="0 0 240 210" role="img" aria-label="Postales de familia atadas con un hilo, una muestra un auto viajando junto al mar">
+                <rect x="18" y="30" width="150" height="108" rx="11" fill="var(--paper-sunken)" stroke="var(--rule-strong)" stroke-width="1.5" transform="rotate(-10 93 84)"/>
+                <rect x="34" y="42" width="150" height="108" rx="11" fill="var(--paper-raised)" stroke="var(--rule-strong)" stroke-width="1.5" transform="rotate(7 109 96)"/>
+                <g transform="rotate(-3 128 118)">
+                    <rect x="50" y="58" width="150" height="108" rx="11" fill="var(--paper-raised)" stroke="var(--rule-strong)" stroke-width="1.5"/>
+                    <circle cx="86" cy="92" r="13" fill="none" stroke="var(--accent)" stroke-width="2.5"/>
+                    <g stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round">
+                        <line x1="86" y1="70" x2="86" y2="64"/>
+                        <line x1="103" y1="78" x2="108" y2="73"/>
+                        <line x1="69" y1="78" x2="64" y2="73"/>
+                    </g>
+                    <path d="M58 132 Q86 121 114 132 T172 132" fill="none" stroke="var(--rule-strong)" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M58 141 Q86 132 114 141 T172 141" fill="none" stroke="var(--rule-strong)" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+                    <path d="M58 152 H197" stroke="var(--rule-strong)" stroke-width="2" stroke-dasharray="5 5"/>
+                    <g transform="translate(112,112)">
+                        <rect x="0" y="7" width="32" height="13" rx="5" fill="var(--status-pendiente)"/>
+                        <rect x="6" y="0" width="17" height="9" rx="4" fill="var(--status-pendiente)"/>
+                        <circle cx="7.5" cy="22" r="4" fill="var(--ink)"/>
+                        <circle cx="25.5" cy="22" r="4" fill="var(--ink)"/>
+                    </g>
+                </g>
+                <path d="M14 54 Q120 196 224 138" fill="none" stroke="var(--status-pendiente)" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+                <circle cx="120" cy="145" r="6" fill="var(--status-pendiente)"/>
+            </svg>
+        </div>
+        <div class="login-copy">
+            <h1>Cuaderno de Guiones</h1>
+            <p>Un ratito por día para que la familia siga cerca, con las mismas historias de siempre.</p>
+            <form class="login-form" method="post" action="/login">
+                <div>
+                    <label>Email</label>
+                    <input type="email" name="email" required autofocus>
+                </div>
+                <div>
+                    <label>Contraseña</label>
+                    <input type="password" name="password" required>
+                </div>
+                {% if error %}<p class="error">{{ error }}</p>{% endif %}
+                <button class="btn" type="submit" style="width:100%; padding:11px; margin-top:2px;">Ingresar</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

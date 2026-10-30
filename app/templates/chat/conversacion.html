@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="{{ paciente.tema.value }}" data-font-size="{{ paciente.tamano_fuente.value }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ personaje.nombre }}</title>
+    <link rel="stylesheet" href="/static/css/chat.css?v={{ static_version('css/chat.css') }}">
+    <meta name="theme-color" content="{{ '#202c33' if paciente.tema.value == 'oscuro' else '#075e54' }}">
+</head>
+<body class="chat-body" data-paciente-id="{{ paciente.id }}" data-push-habilitado="{{ 'true' if paciente.push_habilitado else 'false' }}">
+<div class="chat-header">
+    <a href="/chat/{{ paciente.id }}" class="back-link">&larr;</a>
+    {% if personaje.foto %}
+    <img class="avatar chico" src="{{ personaje.foto }}" alt="{{ personaje.nombre }}">
+    {% else %}
+    <div class="avatar chico">{{ personaje.nombre[0] }}</div>
+    {% endif %}
+    <span class="chat-header-title">{{ personaje.nombre }}</span>
+</div>
+
+<div class="chat-messages" id="chat-messages">
+    {% for e in eventos %}
+    <div class="bubble bubble-{{ e.lado }}">
+        <div class="bubble-text">{{ e.texto }}</div>
+        <div class="bubble-time">
+            {{ e.ts.strftime("%H:%M") if e.ts }}
+            {% if e.lado == "out" %}
+            <svg class="tilde-estado tilde-dos tilde-leido" viewBox="0 0 16 11" width="16" height="11" aria-hidden="true">
+                <path class="tick tick-1" d="M11.1 0.6 4.6 7.1 2.4 4.9 1 6.3l3.6 3.6L12.5 2z"/>
+                <path class="tick tick-2" d="M15.1 0.6 8.6 7.1l-1-1-1.4 1.4 2.4 2.4L16.5 2z"/>
+            </svg>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="chat-input-bar" id="chat-input-bar">
+    {% if esperando_tipo == "opciones" %}
+    <div class="quick-replies">
+        {% for o in esperando_opciones %}
+        <form method="post" action="/chat/{{ paciente.id }}/{{ personaje.id }}/responder" style="display:inline;">
+            <input type="hidden" name="opcion_id" value="{{ o.id }}">
+            <button class="quick-reply-btn" type="submit">{{ o.texto_opcion }}</button>
+        </form>
+        {% endfor %}
+    </div>
+    {% elif esperando_tipo %}
+    <form method="post" action="/chat/{{ paciente.id }}/{{ personaje.id }}/responder" class="text-input-form">
+        <input type="text" name="texto" placeholder="Escribí un mensaje..." autofocus required autocomplete="off">
+        <button type="submit" class="send-btn">&#10148;</button>
+    </form>
+    {% endif %}
+</div>
+<script>
+    var box = document.getElementById("chat-messages");
+    box.scrollTop = box.scrollHeight;
+</script>
+<script src="/static/js/chat.js?v={{ static_version('js/chat.js') }}"></script>
+<script src="/static/js/notificaciones.js?v={{ static_version('js/notificaciones.js') }}"></script>
+<script src="/static/js/push.js?v={{ static_version('js/push.js') }}"></script>
+</body>
+</html>

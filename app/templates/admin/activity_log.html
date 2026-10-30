@@ -1,0 +1,115 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias">&larr; volver</a></p>
+
+<div class="card-header-row">
+    <h2>Activity log</h2>
+    <p class="hint" style="margin:0;">
+        {% if total != all_total %}
+        {{ total }} de {{ all_total }} registro{{ 's' if all_total != 1 else '' }}.
+        {% else %}
+        {{ total }} registro{{ 's' if total != 1 else '' }}.
+        {% endif %}
+    </p>
+</div>
+
+<div class="card">
+    <form method="get" action="/admin/activity-log" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex:1; min-width:150px;">
+            <label>Desde</label>
+            <input type="date" name="date_from" value="{{ f_date_from }}">
+        </div>
+        <div style="flex:1; min-width:150px;">
+            <label>Hasta</label>
+            <input type="date" name="date_to" value="{{ f_date_to }}">
+        </div>
+        <div style="flex:1; min-width:160px;">
+            <label>Acción</label>
+            <select name="accion">
+                <option value="">Todas</option>
+                {% for a in all_acciones %}
+                <option value="{{ a.value }}" {% if f_accion == a.value %}selected{% endif %}>
+                    {{ accion_labels.get(a.value, a.value) }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex:1; min-width:140px;">
+            <label>Entidad</label>
+            <select name="target_type">
+                <option value="">Todas</option>
+                {% for t in all_target_types %}
+                <option value="{{ t }}" {% if f_target_type == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex:1; min-width:140px;">
+            <label>Usuario</label>
+            <select name="usuario_id">
+                <option value="">Todos</option>
+                {% for u in all_usuarios %}
+                <option value="{{ u.id }}" {% if f_usuario_id == u.id %}selected{% endif %}>{{ u.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex:1; min-width:140px;">
+            <label>Familia</label>
+            <select name="familia_id">
+                <option value="">Todas</option>
+                {% for f in all_familias %}
+                <option value="{{ f.id }}" {% if f_familia_id == f.id %}selected{% endif %}>{{ f.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button class="btn chico" type="submit">Filtrar</button>
+        {% if active_filters %}
+        <a href="/admin/activity-log" class="hint">Limpiar</a>
+        {% endif %}
+    </form>
+</div>
+
+{% if not entries %}
+<div class="card"><p class="hint">{{ 'No hay resultados para esos filtros.' if active_filters else 'Todavía no hay actividad registrada.' }}</p></div>
+{% else %}
+<div class="card" style="overflow-x:auto;">
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha/Hora</th>
+                <th>Usuario</th>
+                <th>Familia</th>
+                <th>Acción</th>
+                <th>Entidad</th>
+                <th>Detalle</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in entries %}
+            <tr>
+                <td class="mono" style="white-space:nowrap;">{{ e.creado_en.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                <td>{% if e.usuario %}{{ e.usuario.nombre }}{% else %}<span class="hint" style="margin:0;">Sistema</span>{% endif %}</td>
+                <td>{{ e.familia.nombre if e.familia else '—' }}</td>
+                <td>{{ accion_labels.get(e.accion.value, e.accion.value) }}</td>
+                <td class="hint" style="margin:0;">
+                    {% if e.target_type %}{{ e.target_type }}{% if e.target_id %} #{{ e.target_id }}{% endif %}{% else %}—{% endif %}
+                </td>
+                <td class="hint" style="margin:0; max-width:22rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    {{ e.detalle or '—' }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    {% for p in range(1, total_pages + 1) %}
+    <a href="?accion={{ f_accion }}&target_type={{ f_target_type }}&usuario_id={{ f_usuario_id or '' }}&familia_id={{ f_familia_id or '' }}&date_from={{ f_date_from }}&date_to={{ f_date_to }}&page={{ p }}"
+       class="btn chico {{ 'secundario' if p != page else '' }}">{{ p }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

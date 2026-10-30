@@ -1,0 +1,78 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Settings{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias">&larr; volver</a></p>
+<h2>Settings</h2>
+
+{% if msg == 'init_ok' %}
+<div class="card" style="border-color: var(--status-enviado); color: var(--status-enviado);">Base de datos inicializada correctamente.</div>
+{% elif msg == 'reset_tables_ok' %}
+<div class="card" style="border-color: var(--status-enviado); color: var(--status-enviado);">Tablas seleccionadas regeneradas correctamente.</div>
+{% elif msg == 'reset_ok' %}
+<div class="card" style="border-color: var(--status-enviado); color: var(--status-enviado);">Base de datos reseteada. Volvé a entrar.</div>
+{% elif msg == 'confirm_error' %}
+<div class="card" style="border-color: var(--danger); color: var(--danger);">Texto de confirmación incorrecto. No se realizó ninguna acción.</div>
+{% elif msg == 'no_selection' %}
+<div class="card" style="border-color: var(--danger); color: var(--danger);">No seleccionaste ninguna tabla. No se realizó ninguna acción.</div>
+{% endif %}
+
+<div class="card">
+    <h3>Inicializar base de datos</h3>
+    <p class="hint">Crea las tablas que no existan todavía. Operación segura — no toca datos existentes.</p>
+    <form method="post" action="/admin/settings/init">
+        <button class="btn secundario" type="submit">Inicializar DB</button>
+    </form>
+</div>
+
+<div class="card" style="border-color: var(--danger);">
+    <h3 style="color: var(--danger);">Regenerar datos generados por el uso</h3>
+    <p class="hint">
+        Borra datos que se van acumulando solos con el uso (no el contenido que armaste a mano:
+        familias, personajes y guiones quedan intactos). Afecta a <strong>todas las familias</strong>, no a una en particular.
+    </p>
+    <form method="post" action="/admin/settings/reset-tables" id="form-reset-tables">
+        <div style="display:flex; flex-direction:column; gap:10px; margin:14px 0;">
+            {% for key, cfg in reset_tables.items() %}
+            <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+                <input type="checkbox" name="tables" value="{{ key }}" class="reset-table-chk" style="margin-top:3px;">
+                <span>
+                    <strong>{{ cfg.label }}</strong> <span class="hint" style="margin:0; display:inline;">({{ stats.get(key, 0) }})</span>
+                    <br><span class="hint" style="margin:0;">{{ cfg.desc }}</span>
+                </span>
+            </label>
+            {% endfor %}
+        </div>
+        <label for="confirm-tables-input">Escribí <code>BORRAR</code> para confirmar</label>
+        <input type="text" id="confirm-tables-input" name="confirm" autocomplete="off" placeholder="BORRAR" style="max-width:220px;">
+        <button id="btn-reset-tables" class="btn danger" type="submit" disabled>Regenerar seleccionadas</button>
+    </form>
+</div>
+
+<div class="card" style="border-color: var(--danger);">
+    <h3 style="color: var(--danger);">Resetear todo</h3>
+    <p class="hint">
+        Elimina <strong>todos los datos de toda la app</strong> — familias ({{ stats.get('familias', 0) }}), personajes,
+        conversaciones, guiones, pacientes y usuarios ({{ stats.get('usuarios', 0) }}) — y recrea el esquema vacío.
+    </p>
+    <p class="hint">Tu cuenta sigue existiendo (mismo email y contraseña) como único superadmin; el resto de los usuarios pierde el acceso.</p>
+    <form method="post" action="/admin/settings/reset" id="form-reset-total">
+        <label for="confirm-input">Escribí <code>RESET</code> para confirmar</label>
+        <input type="text" id="confirm-input" name="confirm" autocomplete="off" placeholder="RESET" style="max-width:220px;">
+        <button id="btn-reset-total" class="btn danger" type="submit" disabled>Resetear todo</button>
+    </form>
+</div>
+
+<script>
+document.getElementById('confirm-input').addEventListener('input', function () {
+    document.getElementById('btn-reset-total').disabled = this.value !== 'RESET';
+});
+
+function actualizarBtnResetTablas() {
+    var algunaSeleccionada = [].slice.call(document.querySelectorAll('.reset-table-chk')).some(function (c) { return c.checked; });
+    var confirmaOk = document.getElementById('confirm-tables-input').value === 'BORRAR';
+    document.getElementById('btn-reset-tables').disabled = !(algunaSeleccionada && confirmaOk);
+}
+document.getElementById('confirm-tables-input').addEventListener('input', actualizarBtnResetTablas);
+document.querySelectorAll('.reset-table-chk').forEach(function (c) { c.addEventListener('change', actualizarBtnResetTablas); });
+</script>
+{% endblock %}
