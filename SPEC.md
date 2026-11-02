@@ -55,20 +55,17 @@ Personaje
 
 Guion (nodo de conversación)
   id, personaje_id, fecha_programada, texto_mensaje
-  tipo_respuesta: libre | opciones
   modo_envio: manual | automatico
   estado: borrador | pendiente_aprobacion | enviado
-  nodo_padre_id (nullable, arma el árbol)
+  nodo_padre_id (nullable, solo referencia visual — no se usa en ningún cálculo)
 
-OpcionRespuesta (solo si tipo_respuesta = opciones)
-  id, guion_id, texto_opcion, guion_siguiente_id
-
-RamaRespuestaLibre (solo si tipo_respuesta = libre)
+RamaRespuestaLibre
   id, guion_id, criterio (descripción en lenguaje natural para el matching por IA),
   guion_siguiente_id
   -- incluye una rama "fallback" sin criterio: si la IA no puede clasificar
-     la respuesta con confianza, se dispara un guion_siguiente de tipo
-     "opciones" (quick reply) para no trabar la conversación
+     la respuesta con confianza suficiente, se usa esa rama; si tampoco tiene
+     un guion_siguiente armado, la IA genera un cierre breve en vez de dejar
+     la conversación sin contestar
 
 Interaccion (log)
   id, guion_id, paciente_id, respuesta_texto, rama_elegida_id,

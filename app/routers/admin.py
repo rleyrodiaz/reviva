@@ -17,7 +17,6 @@ from app.models.enums import (
     ModoEnvio,
     TamanoFuente,
     TemaVisual,
-    TipoRespuesta,
     UserRole,
 )
 from app.models.familia import Familia
@@ -27,7 +26,6 @@ from app.models.hecho_familiar import HechoFamiliar
 from app.models.historia import Historia
 from app.models.historia_sesion import HistoriaSesion
 from app.models.interaccion import Interaccion
-from app.models.opcion_respuesta import OpcionRespuesta
 from app.models.paciente import Paciente
 from app.models.personaje import Personaje
 from app.models.push_subscription import PushSubscription
@@ -37,18 +35,23 @@ from app.services import historia_engine, motor
 from app.services.activity_log import registrar_actividad
 from app.services.assets import static_version
 from app.services.auth import (
+    MENSAJE_REQUIERE_ADMIN,
     clear_session,
     hash_password,
     require_admin_familia,
+    require_familia_member,
     require_superadmin,
     require_user,
 )
-from app.services.familias import list_familias_propias
+from app.services.familias import es_admin_de, familias_navbar, list_familias_propias
 from app.services.importador_historia import extraer_texto_archivo
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["static_version"] = static_version
+templates.env.globals["es_admin_de"] = es_admin_de
+templates.env.globals["familias_navbar"] = familias_navbar
+templates.env.globals["mensaje_requiere_admin"] = MENSAJE_REQUIERE_ADMIN
 
 
 def _paciente_de_familia(db: Session, familia_id: int) -> Paciente | None:
@@ -85,24 +88,19 @@ def _guiones_de_entrada(db: Session, guiones: list[Guion]) -> list[Guion]:
 
 
 def _guiones_huerfanos(db: Session, guiones: list[Guion]) -> set[int]:
-    """IDs de guiones que no son de entrada y a los que tampoco ningún otro
-    guion apunta como destino de una opción o rama — es decir, no hay forma
-    de que se disparen nunca. Es solo para mostrar una advertencia; nunca se
-    usa para reactivar nada."""
+    """IDs de guiones que no son de entrada y a los que tampoco ninguna otra
+    rama apunta como destino — es decir, no hay forma de que se disparen
+    nunca. Es solo para mostrar una advertencia; nunca se usa para reactivar
+    nada."""
     if not guiones:
         return set()
     ids = [g.id for g in guiones]
-    destinos_opciones = db.scalars(
-        select(OpcionRespuesta.guion_siguiente_id).where(
-            OpcionRespuesta.guion_id.in_(ids), OpcionRespuesta.guion_siguiente_id.is_not(None)
-        )
-    ).all()
     destinos_ramas = db.scalars(
         select(RamaRespuestaLibre.guion_siguiente_id).where(
             RamaRespuestaLibre.guion_id.in_(ids), RamaRespuestaLibre.guion_siguiente_id.is_not(None)
         )
     ).all()
-    referenciados = set(destinos_opciones) | set(destinos_ramas)
+    referenciados = set(destinos_ramas)
     return {g.id for g in guiones if not g.es_entrada and g.id not in referenciados}
 
 
@@ -124,7 +122,7 @@ def _datos_diagrama(guiones: list[Guion], huerfanos: set[int]) -> str:
     aristas = []
     for g in guiones:
         ramas_no_fallback = [r for r in g.ramas_libres if not r.es_fallback]
-        bifurcacion = (len(g.opciones) + len(ramas_no_fallback)) >= 2
+        bifurcacion = len(ramas_no_fallback) >= 2
         nodos.append({
             "id": g.id,
             "texto": g.texto_mensaje,
@@ -132,26 +130,19 @@ def _datos_diagrama(guiones: list[Guion], huerfanos: set[int]) -> str:
             "es_entrada": g.es_entrada,
             "huerfano": g.id in huerfanos,
             "bifurcacion": bifurcacion,
-            "tipo_respuesta": g.tipo_respuesta.value,
             "pos_x": g.pos_x,
             "pos_y": g.pos_y,
             "ancho": g.ancho,
+            "alto": g.alto,
         })
-        if g.tipo_respuesta == TipoRespuesta.opciones:
-            for o in g.opciones:
-                aristas.append({
-                    "id": o.id, "tipo": "opcion",
-                    "origen": g.id, "destino": o.guion_siguiente_id,
-                    "etiqueta": o.texto_opcion[:30], "fallback": False,
-                })
-        else:
-            for r in g.ramas_libres:
-                aristas.append({
-                    "id": r.id, "tipo": "rama",
-                    "origen": g.id, "destino": r.guion_siguiente_id,
-                    "etiqueta": "sin match" if r.es_fallback else r.criterio[:30],
-                    "fallback": r.es_fallback,
-                })
+        for r in g.ramas_libres:
+            aristas.append({
+                "id": r.id, "tipo": "rama",
+                "origen": g.id, "destino": r.guion_siguiente_id,
+                "etiqueta": "sin match" if r.es_fallback else r.criterio[:30],
+                "criterio": r.criterio,
+                "fallback": r.es_fallback,
+            })
     crudo = json.dumps({"nodos": nodos, "aristas": aristas})
     return crudo.replace("</", "<\\/")
 
@@ -207,13 +198,175 @@ def crear_familia(
     return RedirectResponse(f"/admin/familias/{familia.id}", status_code=303)
 
 
-@router.get("/familias/{familia_id}", response_class=HTMLResponse)
-def dashboard_familia(
+@router.post("/familias/{familia_id}/borrar")
+def borrar_familia(
+    familia_id: int,
+    user: Usuario = Depends(require_superadmin),
+    db: Session = Depends(get_db_dep),
+):
+    """Borra la familia entera: personajes, conversaciones, guiones,
+    paciente, hechos familiares e interacciones se van en cascada (todas
+    las FK relevantes tienen ondelete=CASCADE). Irreversible — por eso es
+    solo de superadmin, y el form que llama a esto pide confirmación."""
+    familia = db.get(Familia, familia_id)
+    if familia is None:
+        raise HTTPException(status_code=404, detail="Familia no encontrada")
+    nombre = familia.nombre
+    # El registro de actividad va ANTES del delete: su FK a familia_id exige
+    # que la fila todavía exista al insertar — después, el ondelete=SET NULL
+    # la deja huérfana sola (se muestra como "—" en el Activity log).
+    registrar_actividad(
+        db, AccionActividad.familia_borrada, usuario_id=user.id, familia_id=familia_id,
+        target_type="familia", target_id=familia_id, detalle=f"nombre={nombre}",
+    )
+    db.flush()
+    # delete() de Core (no db.delete(familia) del ORM): deja que el
+    # ondelete=CASCADE de cada FK haga todo el borrado en cascada en la
+    # base directamente — el ORM, si maneja el borrado él mismo, por
+    # default intenta poner en NULL la FK de los hijos antes de borrar al
+    # padre, lo que rompe contra columnas NOT NULL como pacientes.familia_id.
+    db.execute(delete(Familia).where(Familia.id == familia_id))
+    return RedirectResponse("/admin/familias", status_code=303)
+
+
+def _admins_restantes(db: Session, familia_id: int, excluir_membership_id: int | None = None) -> int:
+    q = select(func.count()).select_from(FamiliaMembership).where(
+        FamiliaMembership.familia_id == familia_id, FamiliaMembership.rol == UserRole.admin_familia
+    )
+    if excluir_membership_id is not None:
+        q = q.where(FamiliaMembership.id != excluir_membership_id)
+    return db.scalar(q)
+
+
+@router.get("/familias/{familia_id}/usuarios", response_class=HTMLResponse)
+def listar_usuarios_familia(
     familia_id: int,
     request: Request,
     user: Usuario = Depends(require_admin_familia),
     db: Session = Depends(get_db_dep),
 ):
+    familia = db.get(Familia, familia_id)
+    memberships = db.scalars(
+        select(FamiliaMembership)
+        .join(Usuario)
+        .where(FamiliaMembership.familia_id == familia_id)
+        .order_by(Usuario.nombre)
+    ).all()
+    return templates.TemplateResponse(
+        "admin/usuarios.html",
+        {
+            "request": request,
+            "user": user,
+            "familia": familia,
+            "memberships": memberships,
+            "roles": list(UserRole),
+            # La fila del superadmin es informativa (no es una membership
+            # real) y solo se muestra cuando quien mira es, de verdad, el
+            # superadmin — nunca a un admin_familia viendo su propia familia.
+            "mostrar_superadmin": user.es_superadmin,
+        },
+    )
+
+
+@router.post("/familias/{familia_id}/usuarios")
+def agregar_usuario_familia(
+    familia_id: int,
+    email: str = Form(...),
+    nombre: str = Form(""),
+    password: str = Form(""),
+    rol: UserRole = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    """Agrega a alguien a la familia — lo puede hacer tanto superadmin como
+    cualquier admin_familia de ESTA familia (no hace falta ser superadmin,
+    a diferencia de crear una familia nueva)."""
+    email = email.strip().lower()
+    objetivo = db.scalar(select(Usuario).where(Usuario.email == email))
+    if objetivo is None:
+        if not nombre.strip() or not password:
+            raise HTTPException(
+                status_code=400,
+                detail="Para una persona nueva hacen falta su nombre y una contraseña.",
+            )
+        objetivo = Usuario(nombre=nombre.strip(), email=email, password_hash=hash_password(password))
+        db.add(objetivo)
+        db.flush()
+
+    existente = db.scalar(
+        select(FamiliaMembership).where(
+            FamiliaMembership.usuario_id == objetivo.id, FamiliaMembership.familia_id == familia_id
+        )
+    )
+    if existente is not None:
+        raise HTTPException(status_code=400, detail="Esa persona ya es parte de esta familia.")
+
+    db.add(FamiliaMembership(usuario_id=objetivo.id, familia_id=familia_id, rol=rol))
+    db.flush()
+    registrar_actividad(
+        db, AccionActividad.usuario_agregado_a_familia, usuario_id=user.id, familia_id=familia_id,
+        target_type="usuario", target_id=objetivo.id, detalle=f"email={email} rol={rol.value}",
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/usuarios", status_code=303)
+
+
+@router.post("/familias/{familia_id}/usuarios/{membership_id}/rol")
+def cambiar_rol_usuario_familia(
+    familia_id: int,
+    membership_id: int,
+    rol: UserRole = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    membership = db.get(FamiliaMembership, membership_id)
+    if membership is None or membership.familia_id != familia_id:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    if membership.rol == UserRole.admin_familia and rol != UserRole.admin_familia:
+        if _admins_restantes(db, familia_id, excluir_membership_id=membership_id) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="No se puede dejar la familia sin ningún admin — asigná otro admin primero.",
+            )
+    membership.rol = rol
+    registrar_actividad(
+        db, AccionActividad.rol_cambiado, usuario_id=user.id, familia_id=familia_id,
+        target_type="usuario", target_id=membership.usuario_id, detalle=f"nuevo_rol={rol.value}",
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/usuarios", status_code=303)
+
+
+@router.post("/familias/{familia_id}/usuarios/{membership_id}/borrar")
+def quitar_usuario_familia(
+    familia_id: int,
+    membership_id: int,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    """Saca a la persona de ESTA familia (no borra su Usuario — puede seguir
+    teniendo acceso a otras familias)."""
+    membership = db.get(FamiliaMembership, membership_id)
+    if membership is None or membership.familia_id != familia_id:
+        raise HTTPException(status_code=404, detail="No encontrado")
+    if membership.rol == UserRole.admin_familia:
+        if _admins_restantes(db, familia_id, excluir_membership_id=membership_id) == 0:
+            raise HTTPException(status_code=400, detail="No se puede dejar la familia sin ningún admin.")
+    usuario_id = membership.usuario_id
+    db.delete(membership)
+    registrar_actividad(
+        db, AccionActividad.usuario_quitado_de_familia, usuario_id=user.id, familia_id=familia_id,
+        target_type="usuario", target_id=usuario_id,
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/usuarios", status_code=303)
+
+
+@router.get("/familias/{familia_id}", response_class=HTMLResponse)
+def dashboard_familia(
+    familia_id: int,
+    request: Request,
+    user: Usuario = Depends(require_familia_member),
+    db: Session = Depends(get_db_dep),
+):
+    user.ultima_familia_id = familia_id
     familia = db.get(Familia, familia_id)
     personajes = db.scalars(
         select(Personaje).where(Personaje.familia_id == familia_id)
@@ -267,17 +420,15 @@ def crear_personaje(
     familia_id: int,
     nombre: str = Form(...),
     foto: str = Form(""),
-    descripcion: str = Form(""),
     relacion_con_paciente: str = Form(""),
     tono_escritura: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     personaje = Personaje(
         familia_id=familia_id,
         nombre=nombre.strip(),
         foto=foto.strip() or None,
-        descripcion=descripcion.strip() or None,
         relacion_con_paciente=relacion_con_paciente.strip() or None,
         tono_escritura=tono_escritura.strip() or None,
     )
@@ -306,16 +457,14 @@ def editar_personaje(
     personaje_id: int,
     nombre: str = Form(...),
     foto: str = Form(""),
-    descripcion: str = Form(""),
     relacion_con_paciente: str = Form(""),
     tono_escritura: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     personaje = db.get(Personaje, personaje_id)
     personaje.nombre = nombre.strip()
     personaje.foto = foto.strip() or None
-    personaje.descripcion = descripcion.strip() or None
     personaje.relacion_con_paciente = relacion_con_paciente.strip() or None
     personaje.tono_escritura = tono_escritura.strip() or None
     return RedirectResponse(_url_personaje(familia_id, personaje_id), status_code=303)
@@ -360,7 +509,7 @@ def detalle_personaje(
     familia_id: int,
     personaje_id: int,
     request: Request,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     personaje = db.get(Personaje, personaje_id)
@@ -386,7 +535,7 @@ def crear_conversacion(
     familia_id: int,
     personaje_id: int,
     nombre: str = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     conversacion = Conversacion(personaje_id=personaje_id, nombre=nombre.strip())
@@ -405,7 +554,7 @@ def editar_conversacion(
     personaje_id: int,
     conversacion_id: int,
     nombre: str = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     conversacion = db.get(Conversacion, conversacion_id)
@@ -419,7 +568,7 @@ def reabrir_conversacion(
     personaje_id: int,
     conversacion_id: int,
     fecha_programada: str = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     # "Reabrir la conversación" = reactivar sus guiones de entrada (los que
@@ -451,7 +600,7 @@ def listar_historias(
     familia_id: int,
     personaje_id: int,
     request: Request,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     personaje = db.get(Personaje, personaje_id)
@@ -481,7 +630,7 @@ def crear_historia(
     contenido: str = Form(""),
     duracion_maxima_minutos: int = Form(10),
     archivo: UploadFile | None = File(None),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     texto_final = _resolver_contenido_historia(contenido, archivo)
@@ -514,7 +663,7 @@ def detalle_historia(
     personaje_id: int,
     historia_id: int,
     request: Request,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     personaje = db.get(Personaje, personaje_id)
@@ -524,6 +673,9 @@ def detalle_historia(
         .where(HistoriaSesion.historia_id == historia_id)
         .order_by(HistoriaSesion.iniciada_en.desc())
     ).all()
+    fecha_programada_valor = ""
+    if historia.fecha_programada is not None:
+        fecha_programada_valor = historia.fecha_programada.strftime("%Y-%m-%dT%H:%M")
     return templates.TemplateResponse(
         "admin/historia_detail.html",
         {
@@ -533,6 +685,8 @@ def detalle_historia(
             "personaje": personaje,
             "historia": historia,
             "sesiones": sesiones,
+            "modos_envio": list(ModoEnvio),
+            "fecha_programada_valor": fecha_programada_valor,
         },
     )
 
@@ -549,7 +703,7 @@ def editar_historia(
     contenido: str = Form(""),
     duracion_maxima_minutos: int = Form(10),
     archivo: UploadFile | None = File(None),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     historia = db.get(Historia, historia_id)
@@ -561,6 +715,28 @@ def editar_historia(
     if texto_final:
         historia.contenido = texto_final
     historia.duracion_maxima_minutos = duracion_maxima_minutos
+    return RedirectResponse(
+        f"/admin/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}", status_code=303
+    )
+
+
+@router.post("/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}/configuracion")
+def configurar_historia(
+    familia_id: int,
+    personaje_id: int,
+    historia_id: int,
+    modo_envio: ModoEnvio = Form(...),
+    fecha_programada: str = Form(""),
+    user: Usuario = Depends(require_familia_member),
+    db: Session = Depends(get_db_dep),
+):
+    """Igual que configurar_conversacion pero para una Historia: en manual
+    (el modo de siempre) la fecha no participa de nada, solo se puede
+    proponer a mano. En automático, el scheduler la propone solo apenas
+    se cumple la fecha."""
+    historia = db.get(Historia, historia_id)
+    historia.modo_envio = modo_envio
+    historia.fecha_programada = datetime.fromisoformat(fecha_programada) if fecha_programada else None
     return RedirectResponse(
         f"/admin/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}", status_code=303
     )
@@ -589,14 +765,58 @@ def proponer_historia(
     user: Usuario = Depends(require_admin_familia),
     db: Session = Depends(get_db_dep),
 ):
-    """Arranca una sesión nueva ahora mismo: la IA genera el primer mensaje
-    del personaje invitando al paciente a hablar de esta historia."""
+    """En manual, igual que un guion de entrada manual: genera el primer
+    mensaje y lo deja esperando aprobación en la Bandeja, no le llega nada
+    al paciente todavía. En automático (disparo manual anticipado, antes de
+    la fecha) arranca directo, sin pasar por la bandeja — como el
+    scheduler mismo haría."""
     historia = db.get(Historia, historia_id)
-    paciente = _paciente_de_familia(db, familia_id)
-    historia_engine.iniciar_sesion(db, historia, paciente.id)
+    if historia.modo_envio == ModoEnvio.manual:
+        historia_engine.proponer(db, historia)
+    else:
+        paciente = _paciente_de_familia(db, familia_id)
+        historia_engine.iniciar_sesion(db, historia, paciente.id)
     return RedirectResponse(
         f"/admin/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}", status_code=303
     )
+
+
+@router.post("/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}/bandeja/aprobar")
+def aprobar_historia_desde_bandeja(
+    familia_id: int,
+    personaje_id: int,
+    historia_id: int,
+    mensaje: str = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    historia = db.get(Historia, historia_id)
+    if historia.mensaje_propuesto is not None:
+        paciente = _paciente_de_familia(db, familia_id)
+        historia_engine.aprobar_propuesta(db, historia, paciente.id, mensaje.strip())
+        registrar_actividad(
+            db, AccionActividad.historia_aprobada, usuario_id=user.id, familia_id=familia_id,
+            target_type="historia", target_id=historia_id,
+        )
+    return RedirectResponse(f"/admin/familias/{familia_id}/bandeja", status_code=303)
+
+
+@router.post("/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}/bandeja/desactivar")
+def desactivar_historia_desde_bandeja(
+    familia_id: int,
+    personaje_id: int,
+    historia_id: int,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    historia = db.get(Historia, historia_id)
+    if historia.mensaje_propuesto is not None:
+        historia_engine.desactivar_propuesta(historia)
+        registrar_actividad(
+            db, AccionActividad.historia_desactivada, usuario_id=user.id, familia_id=familia_id,
+            target_type="historia", target_id=historia_id,
+        )
+    return RedirectResponse(f"/admin/familias/{familia_id}/bandeja", status_code=303)
 
 
 @router.get(
@@ -608,7 +828,7 @@ def detalle_conversacion(
     personaje_id: int,
     conversacion_id: int,
     request: Request,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     personaje = db.get(Personaje, personaje_id)
@@ -643,7 +863,6 @@ def detalle_conversacion(
             "guion_entrada": guion_entrada,
             "fecha_entrada_valor": fecha_entrada_valor,
             "diagrama_json": _datos_diagrama(guiones, huerfanos),
-            "tipos_respuesta": list(TipoRespuesta),
             "modos_envio": list(ModoEnvio),
         },
     )
@@ -659,7 +878,7 @@ def configurar_conversacion(
     fecha_programada: str = Form(...),
     modo_envio: ModoEnvio = Form(...),
     reabrir: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     """Panel de arriba del mapa: fecha y modo de envío son del guion de
@@ -676,7 +895,7 @@ def configurar_conversacion(
     guiones = db.scalars(select(Guion).where(Guion.conversacion_id == conversacion_id)).all()
     guion_entrada = next((g for g in guiones if g.es_entrada), None)
     if guion_entrada is None:
-        raise HTTPException(status_code=400, detail="Todavía no hay un guion de entrada: creá el primero en el mapa.")
+        raise HTTPException(status_code=400, detail="Todavía no hay un nodo de entrada: creá el primero en el mapa.")
     guion_entrada.fecha_programada = datetime.fromisoformat(fecha_programada)
     guion_entrada.modo_envio = modo_envio
     if modo_envio == ModoEnvio.manual:
@@ -702,7 +921,8 @@ def guardar_posicion_guion(
     pos_x: int = Form(...),
     pos_y: int = Form(...),
     ancho: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    alto: str = Form(""),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     guion = db.get(Guion, guion_id)
@@ -710,6 +930,8 @@ def guardar_posicion_guion(
     guion.pos_y = pos_y
     if ancho:
         guion.ancho = int(ancho)
+    if alto:
+        guion.alto = int(alto)
     return JSONResponse({"ok": True})
 
 
@@ -722,7 +944,7 @@ def editar_texto_rapido_guion(
     conversacion_id: int,
     guion_id: int,
     texto: str = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     """Edición de texto in-line desde el mapa visual — igual que el campo
@@ -745,16 +967,14 @@ def conectar_guion(
     guion_id: int,
     destino_id: str = Form(""),
     etiqueta: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
-    """Arrastrar de un guion a otro en el mapa crea la opción/rama que los
-    conecta — una opción si el origen es de tipo "opciones", o una rama libre
-    si es de tipo "libre". Sin destino (se soltó en un espacio vacío, con
-    confirmación del lado del cliente) el camino termina en "fin". Para un
-    origen "libre", dejar la etiqueta vacía no crea una rama nueva: reapunta
-    el fallback existente (el camino "sin match", con o sin destino) — todo
-    guion libre tiene uno solo."""
+    """Arrastrar de un guion a otro en el mapa crea la rama libre que los
+    conecta. Sin destino (se soltó en un espacio vacío, con confirmación del
+    lado del cliente) el camino termina en "fin". Dejar la etiqueta vacía no
+    crea una rama nueva: reapunta el fallback existente (el camino "sin
+    match", con o sin destino) — todo guion tiene uno solo."""
     origen = db.get(Guion, guion_id)
     destino = None
     if destino_id:
@@ -764,20 +984,6 @@ def conectar_guion(
     destino_final_id = destino.id if destino else None
     etiqueta_limpia = etiqueta.strip()
 
-    if origen.tipo_respuesta == TipoRespuesta.opciones:
-        if not etiqueta_limpia:
-            raise HTTPException(status_code=400, detail="Hace falta un texto para la opción.")
-        nueva = OpcionRespuesta(guion_id=origen.id, texto_opcion=etiqueta_limpia, guion_siguiente_id=destino_final_id)
-        db.add(nueva)
-        db.flush()
-        return JSONResponse({
-            "ok": True,
-            "arista": {
-                "id": nueva.id, "tipo": "opcion",
-                "origen": origen.id, "destino": destino_final_id, "etiqueta": etiqueta_limpia[:30], "fallback": False,
-            },
-        })
-
     if not etiqueta_limpia:
         fallback = next((r for r in origen.ramas_libres if r.es_fallback), None)
         fallback.guion_siguiente_id = destino_final_id
@@ -785,7 +991,8 @@ def conectar_guion(
             "ok": True,
             "arista": {
                 "id": fallback.id, "tipo": "rama",
-                "origen": origen.id, "destino": destino_final_id, "etiqueta": "sin match", "fallback": True,
+                "origen": origen.id, "destino": destino_final_id, "etiqueta": "sin match",
+                "criterio": None, "fallback": True,
             },
         })
 
@@ -796,7 +1003,8 @@ def conectar_guion(
         "ok": True,
         "arista": {
             "id": nueva.id, "tipo": "rama",
-            "origen": origen.id, "destino": destino_final_id, "etiqueta": etiqueta_limpia[:30], "fallback": False,
+            "origen": origen.id, "destino": destino_final_id, "etiqueta": etiqueta_limpia[:30],
+            "criterio": etiqueta_limpia, "fallback": False,
         },
     })
 
@@ -809,15 +1017,14 @@ def crear_guion(
     personaje_id: int,
     conversacion_id: int,
     texto_mensaje: str = Form(...),
-    tipo_respuesta: TipoRespuesta = Form(...),
-    nodo_padre_id: str = Form(""),
     pos_x: str = Form(""),
     pos_y: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
-    """El guion se crea entero desde el mapa: solo pide el contenido (texto
-    y tipo de respuesta). La fecha y el modo de envío son del guion de
+    """El guion se crea entero desde el mapa: solo pide el mensaje. La IA
+    clasifica lo que conteste el paciente contra las ramas que se conecten
+    desde el menú del mapa. La fecha y el modo de envío son del guion de
     entrada, se configuran en el panel de arriba. El primer guion que se
     crea en una conversación (o el primero después de borrar el anterior)
     se vuelve su guion de entrada automáticamente, sin elegirlo a mano. El
@@ -833,20 +1040,17 @@ def crear_guion(
         conversacion_id=conversacion_id,
         fecha_programada=FECHA_SIN_PROGRAMAR,
         texto_mensaje=texto_mensaje.strip(),
-        tipo_respuesta=tipo_respuesta,
         modo_envio=ModoEnvio.manual if es_entrada else ModoEnvio.automatico,
         estado=EstadoGuion.borrador,
-        nodo_padre_id=int(nodo_padre_id) if nodo_padre_id else None,
         es_entrada=es_entrada,
         pos_x=int(pos_x) if pos_x else None,
         pos_y=int(pos_y) if pos_y else None,
     )
     db.add(guion)
     db.flush()
-    if tipo_respuesta == TipoRespuesta.libre:
-        # Toda rama libre necesita su fallback desde el arranque, para que la
-        # conversación nunca quede sin salida si la IA no puede clasificar.
-        db.add(RamaRespuestaLibre(guion_id=guion.id, es_fallback=True))
+    # Toda rama libre necesita su fallback desde el arranque, para que la
+    # conversación nunca quede sin salida si la IA no puede clasificar.
+    db.add(RamaRespuestaLibre(guion_id=guion.id, es_fallback=True))
     registrar_actividad(
         db, AccionActividad.guion_creado, usuario_id=user.id, familia_id=familia_id,
         target_type="guion", target_id=guion.id,
@@ -862,27 +1066,23 @@ def importar_guion(
     personaje_id: int,
     conversacion_id: int,
     guion_origen_id: int = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     """Trae una copia de un guion de otra conversación (o de otro personaje)
-    a esta conversación. Las ramas/opciones se copian pero sin destino,
-    porque los guiones a los que apuntaban no son parte de esta conversación."""
+    a esta conversación. Las ramas se copian pero sin destino, porque los
+    guiones a los que apuntaban no son parte de esta conversación."""
     original = db.get(Guion, guion_origen_id)
     copia = Guion(
         personaje_id=personaje_id,
         conversacion_id=conversacion_id,
         fecha_programada=original.fecha_programada + timedelta(days=1),
         texto_mensaje=original.texto_mensaje,
-        tipo_respuesta=original.tipo_respuesta,
         modo_envio=original.modo_envio,
         estado=EstadoGuion.borrador,
-        nodo_padre_id=None,
     )
     db.add(copia)
     db.flush()
-    for o in original.opciones:
-        db.add(OpcionRespuesta(guion_id=copia.id, texto_opcion=o.texto_opcion))
     for r in original.ramas_libres:
         db.add(RamaRespuestaLibre(guion_id=copia.id, criterio=r.criterio, es_fallback=r.es_fallback))
     return RedirectResponse(_url_conversacion(familia_id, personaje_id, conversacion_id), status_code=303)
@@ -897,7 +1097,7 @@ def editar_guion(
     conversacion_id: int,
     guion_id: int,
     texto_mensaje: str = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     # El tipo de respuesta no se edita acá: cambiarlo dejaría huérfanas las
@@ -917,7 +1117,7 @@ def duplicar_guion(
     personaje_id: int,
     conversacion_id: int,
     guion_id: int,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     original = db.get(Guion, guion_id)
@@ -926,17 +1126,12 @@ def duplicar_guion(
         conversacion_id=original.conversacion_id,
         fecha_programada=original.fecha_programada + timedelta(days=1),
         texto_mensaje=original.texto_mensaje,
-        tipo_respuesta=original.tipo_respuesta,
         modo_envio=original.modo_envio,
         estado=EstadoGuion.borrador,
         nodo_padre_id=original.nodo_padre_id,
     )
     db.add(copia)
     db.flush()
-    for o in original.opciones:
-        db.add(OpcionRespuesta(
-            guion_id=copia.id, texto_opcion=o.texto_opcion, guion_siguiente_id=o.guion_siguiente_id
-        ))
     for r in original.ramas_libres:
         db.add(RamaRespuestaLibre(
             guion_id=copia.id, criterio=r.criterio, es_fallback=r.es_fallback,
@@ -954,7 +1149,7 @@ def reabrir_guion(
     conversacion_id: int,
     guion_id: int,
     fecha_programada: str = Form(...),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     guion = db.get(Guion, guion_id)
@@ -985,47 +1180,6 @@ def borrar_guion(
 
 
 @router.post(
-    "/familias/{familia_id}/personajes/{personaje_id}/conversaciones/{conversacion_id}/guiones/{guion_id}/opciones"
-)
-def agregar_opcion(
-    familia_id: int,
-    personaje_id: int,
-    conversacion_id: int,
-    guion_id: int,
-    texto_opcion: str = Form(...),
-    guion_siguiente_id: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
-    db: Session = Depends(get_db_dep),
-):
-    db.add(
-        OpcionRespuesta(
-            guion_id=guion_id,
-            texto_opcion=texto_opcion.strip(),
-            guion_siguiente_id=int(guion_siguiente_id) if guion_siguiente_id else None,
-        )
-    )
-    return RedirectResponse(_url_conversacion(familia_id, personaje_id, conversacion_id), status_code=303)
-
-
-@router.post(
-    "/familias/{familia_id}/personajes/{personaje_id}/conversaciones/{conversacion_id}"
-    "/guiones/{guion_id}/opciones/{opcion_id}/borrar"
-)
-def borrar_opcion(
-    familia_id: int,
-    personaje_id: int,
-    conversacion_id: int,
-    guion_id: int,
-    opcion_id: int,
-    user: Usuario = Depends(require_admin_familia),
-    db: Session = Depends(get_db_dep),
-):
-    opcion = db.get(OpcionRespuesta, opcion_id)
-    db.delete(opcion)
-    return RedirectResponse(_url_conversacion(familia_id, personaje_id, conversacion_id), status_code=303)
-
-
-@router.post(
     "/familias/{familia_id}/personajes/{personaje_id}/conversaciones/{conversacion_id}/guiones/{guion_id}/ramas"
 )
 def agregar_rama(
@@ -1035,7 +1189,7 @@ def agregar_rama(
     guion_id: int,
     criterio: str = Form(...),
     guion_siguiente_id: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     db.add(
@@ -1046,6 +1200,40 @@ def agregar_rama(
         )
     )
     return RedirectResponse(_url_conversacion(familia_id, personaje_id, conversacion_id), status_code=303)
+
+
+@router.post(
+    "/familias/{familia_id}/personajes/{personaje_id}/conversaciones/{conversacion_id}"
+    "/guiones/{guion_id}/ramas/{rama_id}/editar"
+)
+def editar_rama(
+    familia_id: int,
+    personaje_id: int,
+    conversacion_id: int,
+    guion_id: int,
+    rama_id: int,
+    criterio: str = Form(...),
+    user: Usuario = Depends(require_familia_member),
+    db: Session = Depends(get_db_dep),
+):
+    """Cambia el criterio de una rama ya creada — desde el mapa, al hacer
+    click en la conexión. El fallback no tiene criterio propio (es "lo que no
+    matcheó con ninguna otra"), así que no se puede editar."""
+    rama = db.get(RamaRespuestaLibre, rama_id)
+    if rama is None or rama.es_fallback:
+        raise HTTPException(status_code=400, detail="Esta rama no se puede editar.")
+    criterio_limpio = criterio.strip()
+    if not criterio_limpio:
+        raise HTTPException(status_code=400, detail="El criterio no puede quedar vacío.")
+    rama.criterio = criterio_limpio
+    return JSONResponse({
+        "ok": True,
+        "arista": {
+            "id": rama.id, "tipo": "rama",
+            "origen": rama.guion_id, "destino": rama.guion_siguiente_id, "etiqueta": criterio_limpio[:30],
+            "criterio": criterio_limpio, "fallback": False,
+        },
+    })
 
 
 @router.post(
@@ -1078,7 +1266,7 @@ def editar_fallback(
     conversacion_id: int,
     guion_id: int,
     guion_siguiente_id: str = Form(""),
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     guion = db.get(Guion, guion_id)
@@ -1101,9 +1289,18 @@ def bandeja_aprobacion(
         .where(Personaje.familia_id == familia_id, Guion.estado == EstadoGuion.pendiente_aprobacion)
         .order_by(Guion.fecha_programada)
     ).all()
+    pendientes_historias = db.scalars(
+        select(Historia)
+        .join(Personaje)
+        .where(Personaje.familia_id == familia_id, Historia.mensaje_propuesto.is_not(None))
+        .order_by(Historia.propuesta_en)
+    ).all()
     return templates.TemplateResponse(
         "admin/bandeja.html",
-        {"request": request, "user": user, "familia_id": familia_id, "pendientes": pendientes},
+        {
+            "request": request, "user": user, "familia_id": familia_id,
+            "pendientes": pendientes, "pendientes_historias": pendientes_historias,
+        },
     )
 
 
@@ -1156,7 +1353,7 @@ def desactivar_desde_bandeja(
 def listar_hechos(
     familia_id: int,
     request: Request,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
     pendientes = db.scalars(
@@ -1225,14 +1422,20 @@ def reconsiderar_hecho(
     return RedirectResponse(f"/admin/familias/{familia_id}/hechos", status_code=303)
 
 
-# ---------- Activity log / Settings (globales, solo superadmin) ----------
+# ---------- Activity log / Settings (por familia, admin_familia o superadmin) ----------
 
 ACCION_LABELS = {
     "usuario_login": "Login",
+    "familia_borrada": "Familia borrada",
+    "usuario_agregado_a_familia": "Usuario agregado",
+    "rol_cambiado": "Rol cambiado",
+    "usuario_quitado_de_familia": "Usuario quitado",
     "guion_creado": "Guion creado",
     "guion_borrado": "Guion borrado",
     "guion_aprobado": "Guion aprobado (bandeja)",
     "guion_desactivado": "Guion desactivado (bandeja)",
+    "historia_aprobada": "Historia aprobada (bandeja)",
+    "historia_desactivada": "Historia desactivada (bandeja)",
     "conversacion_configurada": "Conversación configurada",
     "db_inicializada": "DB inicializada",
     "db_reset_parcial": "Reset parcial de datos",
@@ -1242,33 +1445,32 @@ ACCION_LABELS = {
 ACTIVITY_LOG_PAGE_SIZE = 50
 
 
-@router.get("/activity-log", response_class=HTMLResponse)
+@router.get("/familias/{familia_id}/activity-log", response_class=HTMLResponse)
 def activity_log_page(
+    familia_id: int,
     request: Request,
-    user: Usuario = Depends(require_superadmin),
+    user: Usuario = Depends(require_admin_familia),
     db: Session = Depends(get_db_dep),
     accion: str = Query(default=""),
     target_type: str = Query(default=""),
-    familia_id: str = Query(default=""),
     usuario_id: str = Query(default=""),
     date_from: str = Query(default=""),
     date_to: str = Query(default=""),
     page: int = Query(default=1),
 ):
+    familia = db.get(Familia, familia_id)
     all_entries = db.scalars(
         select(ActivityLog)
-        .options(joinedload(ActivityLog.usuario), joinedload(ActivityLog.familia))
+        .options(joinedload(ActivityLog.usuario))
+        .where(ActivityLog.familia_id == familia_id)
         .order_by(ActivityLog.creado_en.desc())
     ).unique().all()
 
     all_target_types = sorted({e.target_type for e in all_entries if e.target_type})
     all_usuarios: dict[int, Usuario] = {}
-    all_familias: dict[int, Familia] = {}
     for e in all_entries:
         if e.usuario and e.usuario_id not in all_usuarios:
             all_usuarios[e.usuario_id] = e.usuario
-        if e.familia and e.familia_id not in all_familias:
-            all_familias[e.familia_id] = e.familia
 
     f_accion = accion.strip()
     f_target_type = target_type.strip()
@@ -1278,12 +1480,6 @@ def activity_log_page(
         f_usuario_id = 0
     if f_usuario_id not in all_usuarios:
         f_usuario_id = 0
-    try:
-        f_familia_id = int(familia_id)
-    except (ValueError, TypeError):
-        f_familia_id = 0
-    if f_familia_id not in all_familias:
-        f_familia_id = 0
     f_date_from = date_from.strip()
     f_date_to = date_to.strip()
 
@@ -1294,8 +1490,6 @@ def activity_log_page(
         entries = [e for e in entries if e.target_type == f_target_type]
     if f_usuario_id:
         entries = [e for e in entries if e.usuario_id == f_usuario_id]
-    if f_familia_id:
-        entries = [e for e in entries if e.familia_id == f_familia_id]
     if f_date_from:
         try:
             d_from = date.fromisoformat(f_date_from)
@@ -1316,8 +1510,7 @@ def activity_log_page(
     page_entries = entries[(page - 1) * ACTIVITY_LOG_PAGE_SIZE: page * ACTIVITY_LOG_PAGE_SIZE]
 
     active_filters = sum([
-        bool(f_accion), bool(f_target_type), bool(f_usuario_id), bool(f_familia_id),
-        bool(f_date_from), bool(f_date_to),
+        bool(f_accion), bool(f_target_type), bool(f_usuario_id), bool(f_date_from), bool(f_date_to),
     ])
 
     return templates.TemplateResponse(
@@ -1325,16 +1518,15 @@ def activity_log_page(
         {
             "request": request,
             "user": user,
+            "familia": familia,
             "entries": page_entries,
             "accion_labels": ACCION_LABELS,
             "all_acciones": list(AccionActividad),
             "all_target_types": all_target_types,
             "all_usuarios": sorted(all_usuarios.values(), key=lambda u: u.nombre.lower()),
-            "all_familias": sorted(all_familias.values(), key=lambda f: f.nombre.lower()),
             "f_accion": f_accion,
             "f_target_type": f_target_type,
             "f_usuario_id": f_usuario_id,
-            "f_familia_id": f_familia_id,
             "f_date_from": f_date_from,
             "f_date_to": f_date_to,
             "page": page,
@@ -1347,62 +1539,120 @@ def activity_log_page(
 
 
 # Tablas que se pueden regenerar selectivamente desde Settings — a diferencia
-# de Familias/Personajes/Guiones (contenido armado a mano por el admin), son
-# datos que se van generando solos con el uso, así que borrarlos no destruye
-# ningún guion diseñado. Settings es global (no hay "familia activa" como en
-# Movies), así que esto afecta a TODAS las familias a la vez.
+# de Personajes/Guiones (contenido armado a mano por el admin), son datos que
+# se van generando solos con el uso, así que borrarlos no destruye ningún
+# guion diseñado. A diferencia del reset total (ver más abajo), esto queda
+# acotado a UNA familia — cada entrada define cómo llegar desde el modelo
+# hasta familia_id para poder filtrar.
 RESET_TABLES = {
     "interacciones": {
         "label": "Interacciones",
         "model": Interaccion,
-        "desc": "Historial de mensajes de guiones (envíos y respuestas), de todas las familias.",
+        "desc": "Historial de mensajes de guiones (envíos y respuestas) de esta familia.",
+        "scope": lambda familia_id: Interaccion.guion_id.in_(
+            select(Guion.id).join(Personaje).where(Personaje.familia_id == familia_id)
+        ),
     },
     "historias_sesiones": {
         "label": "Sesiones de historia",
         "model": HistoriaSesion,
-        "desc": "Sesiones de Historia y sus mensajes (no las historias/plantillas en sí), de todas las familias.",
+        "desc": "Sesiones de Historia y sus mensajes (no las historias/plantillas en sí) de esta familia.",
+        "scope": lambda familia_id: HistoriaSesion.historia_id.in_(
+            select(Historia.id).join(Personaje).where(Personaje.familia_id == familia_id)
+        ),
     },
     "hechos": {
         "label": "Hechos familiares",
         "model": HechoFamiliar,
-        "desc": "Hechos detectados a partir de las Historias (pendientes, validados y descartados), de todas las familias.",
+        "desc": "Hechos detectados a partir de las Historias (pendientes, validados y descartados) de esta familia.",
+        "scope": lambda familia_id: HechoFamiliar.familia_id == familia_id,
     },
     "push": {
         "label": "Suscripciones push",
         "model": PushSubscription,
-        "desc": "Suscripciones push guardadas — los pacientes dejan de recibir notificaciones hasta que las vuelvan a habilitar.",
+        "desc": "Suscripciones push guardadas de esta familia — su paciente deja de recibir notificaciones hasta que las vuelva a habilitar.",
+        "scope": lambda familia_id: PushSubscription.paciente_id.in_(
+            select(Paciente.id).where(Paciente.familia_id == familia_id)
+        ),
     },
     "activity_log": {
         "label": "Activity log",
         "model": ActivityLog,
-        "desc": "El historial de esta misma pantalla.",
+        "desc": "El historial de esta misma pantalla, de esta familia.",
+        "scope": lambda familia_id: ActivityLog.familia_id == familia_id,
     },
 }
 RESET_DELETE_ORDER = ["interacciones", "historias_sesiones", "hechos", "push", "activity_log"]
 
 
-@router.get("/settings", response_class=HTMLResponse)
+@router.get("/familias/{familia_id}/settings", response_class=HTMLResponse)
 def settings_page(
+    familia_id: int,
+    request: Request,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+    msg: str = "",
+):
+    familia = db.get(Familia, familia_id)
+    stats = {
+        key: db.scalar(select(func.count()).select_from(cfg["model"]).where(cfg["scope"](familia_id)))
+        for key, cfg in RESET_TABLES.items()
+    }
+    return templates.TemplateResponse(
+        "admin/settings.html",
+        {
+            "request": request,
+            "user": user,
+            "familia": familia,
+            "msg": msg,
+            "reset_tables": RESET_TABLES,
+            "stats": stats,
+        },
+    )
+
+
+@router.post("/familias/{familia_id}/settings/reset-tables")
+def settings_reset_tables(
+    familia_id: int,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+    confirm: str = Form(""),
+    tables: list[str] = Form(default=[]),
+):
+    if confirm.strip() != "BORRAR":
+        return RedirectResponse(f"/admin/familias/{familia_id}/settings?msg=confirm_error", status_code=303)
+
+    selected = [key for key in RESET_DELETE_ORDER if key in tables and key in RESET_TABLES]
+    if not selected:
+        return RedirectResponse(f"/admin/familias/{familia_id}/settings?msg=no_selection", status_code=303)
+
+    for key in selected:
+        cfg = RESET_TABLES[key]
+        db.execute(delete(cfg["model"]).where(cfg["scope"](familia_id)))
+
+    registrar_actividad(
+        db, AccionActividad.db_reset_parcial, usuario_id=user.id, familia_id=familia_id,
+        detalle=f"tablas={selected}",
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/settings?msg=reset_tables_ok", status_code=303)
+
+
+# ---------- Settings global (solo superadmin): inicializar/resetear TODO el sistema ----------
+
+@router.get("/settings", response_class=HTMLResponse)
+def settings_superadmin_page(
     request: Request,
     user: Usuario = Depends(require_superadmin),
     db: Session = Depends(get_db_dep),
     msg: str = "",
 ):
     stats = {
-        key: db.scalar(select(func.count()).select_from(cfg["model"]))
-        for key, cfg in RESET_TABLES.items()
+        "familias": db.scalar(select(func.count()).select_from(Familia)),
+        "usuarios": db.scalar(select(func.count()).select_from(Usuario)),
     }
-    stats["familias"] = db.scalar(select(func.count()).select_from(Familia))
-    stats["usuarios"] = db.scalar(select(func.count()).select_from(Usuario))
     return templates.TemplateResponse(
-        "admin/settings.html",
-        {
-            "request": request,
-            "user": user,
-            "msg": msg,
-            "reset_tables": RESET_TABLES,
-            "stats": stats,
-        },
+        "admin/settings_superadmin.html",
+        {"request": request, "user": user, "msg": msg, "stats": stats},
     )
 
 
@@ -1414,29 +1664,6 @@ def settings_init(
     Base.metadata.create_all(bind=engine)
     registrar_actividad(db, AccionActividad.db_inicializada, usuario_id=user.id)
     return RedirectResponse("/admin/settings?msg=init_ok", status_code=303)
-
-
-@router.post("/settings/reset-tables")
-def settings_reset_tables(
-    user: Usuario = Depends(require_superadmin),
-    db: Session = Depends(get_db_dep),
-    confirm: str = Form(""),
-    tables: list[str] = Form(default=[]),
-):
-    if confirm.strip() != "BORRAR":
-        return RedirectResponse("/admin/settings?msg=confirm_error", status_code=303)
-
-    selected = [key for key in RESET_DELETE_ORDER if key in tables and key in RESET_TABLES]
-    if not selected:
-        return RedirectResponse("/admin/settings?msg=no_selection", status_code=303)
-
-    for key in selected:
-        db.execute(delete(RESET_TABLES[key]["model"]))
-
-    registrar_actividad(
-        db, AccionActividad.db_reset_parcial, usuario_id=user.id, detalle=f"tablas={selected}",
-    )
-    return RedirectResponse("/admin/settings?msg=reset_tables_ok", status_code=303)
 
 
 @router.post("/settings/reset")

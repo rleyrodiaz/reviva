@@ -5,18 +5,20 @@
 
 <div class="row-2col">
     <div class="col-narrow">
+        {% if es_admin_de(user, familia.id) %}
         <div class="card">
             <div class="card-header-row">
                 <strong>Bandeja de aprobación</strong>
-                <a class="btn chico" href="/admin/familias/{{ familia.id }}/bandeja">Ver ({{ cantidad_pendientes }})</a>
+                <a class="btn chico" href="/admin/familias/{{ familia.id }}/bandeja" data-modal-titulo="Bandeja de aprobación">Ver ({{ cantidad_pendientes }})</a>
             </div>
             <p class="hint">{{ cantidad_pendientes }} guion(es) esperando revisión manual.</p>
         </div>
+        {% endif %}
 
         <div class="card">
             <div class="card-header-row">
                 <strong>Hechos de familia</strong>
-                <a class="btn chico" href="/admin/familias/{{ familia.id }}/hechos">Ver ({{ cantidad_hechos_pendientes }})</a>
+                <a class="btn chico" href="/admin/familias/{{ familia.id }}/hechos" data-modal-titulo="Hechos de familia">Ver ({{ cantidad_hechos_pendientes }})</a>
             </div>
             <p class="hint">{{ cantidad_hechos_pendientes }} dato(s) nuevo(s) esperando tu validación.</p>
         </div>
@@ -84,6 +86,7 @@
                     <div class="facts">{{ p.conversaciones|length }} conversación(es)</div>
                     <div class="actions">
                         <a class="btn chico secundario" href="/admin/familias/{{ familia.id }}/personajes/{{ p.id }}">Abrir</a>
+                        {% if es_admin_de(user, familia.id) %}
                         <form method="post" action="/admin/familias/{{ familia.id }}/personajes/{{ p.id }}/vaciar-chat"
                               data-confirm="¿Borrar todo lo que {{ paciente.nombre if paciente else 'el paciente' }} chateó con {{ p.nombre }}? No borra los guiones ni las conversaciones, solo lo ya enviado y contestado.">
                             <button type="submit" class="btn chico quiet" style="width:100%;">Vaciar chat</button>
@@ -92,6 +95,7 @@
                               data-confirm="¿Borrar a {{ p.nombre }} por completo? Se borran todas sus conversaciones, guiones y el historial de chat con el paciente. No se puede deshacer.">
                             <button type="submit" class="btn chico danger" style="width:100%;">Borrar personaje</button>
                         </form>
+                        {% endif %}
                     </div>
                 </div>
                 {% else %}
@@ -112,8 +116,6 @@
         <label>Foto (URL)</label>
         <input type="text" name="foto" placeholder="https://... o /static/images/archivo.jpg">
         <p class="hint">Si la imagen está en tu PC, copiala a la carpeta <code>app/static/images/</code> y poné acá <code>/static/images/archivo.jpg</code> (no la ruta de Windows).</p>
-        <label>Descripción / historia compartida</label>
-        <textarea name="descripcion" rows="2"></textarea>
         <label>Tono de escritura</label>
         <textarea name="tono_escritura" rows="2" placeholder="Informal, usa 'vos', frases cortas..."></textarea>
         <div class="modal-actions">

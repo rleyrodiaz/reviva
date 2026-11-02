@@ -6,12 +6,12 @@ from sqlalchemy.orm import Session
 from app.models.enums import EstadoGuion, ModoEnvio
 from app.models.guion import Guion
 from app.models.interaccion import Interaccion
-from app.models.opcion_respuesta import OpcionRespuesta
 from app.models.paciente import Paciente
 from app.models.personaje import Personaje
 from app.services.cierre_guion import generar_cierre
 from app.services.clasificador import clasificar_respuesta
 from app.services.push import enviar_push_paciente
+from app.services.respuesta_guion import adaptar_mensaje_guion
 
 CONFIANZA_MINIMA = 0.6
 
@@ -68,12 +68,52 @@ def aprobar_guion(
     return _enviar_guion(db, guion, paciente_id, ahora or datetime.now(timezone.utc))
 
 
-def _enviar_guion(db: Session, guion: Guion, paciente_id: int, ahora: datetime) -> Interaccion:
+def _transcripcion_guion(db: Session, personaje_id: int, paciente_id: int) -> str:
+    """Toda la charla guionada hasta ahora entre este personaje y este
+    paciente, en orden — para que la IA pueda chequear consistencia contra
+    cualquier punto anterior, no solo contra el último mensaje."""
+    interacciones = db.scalars(
+        select(Interaccion)
+        .join(Guion)
+        .where(Guion.personaje_id == personaje_id, Interaccion.paciente_id == paciente_id)
+        .order_by(Interaccion.timestamp_envio)
+    ).all()
+    if not interacciones:
+        return "(sin mensajes previos)"
+    lineas = []
+    for i in interacciones:
+        nombre_personaje = i.guion.personaje.nombre.upper()
+        lineas.append(f"{nombre_personaje}: {i.texto_enviado or i.guion.texto_mensaje}")
+        if i.respuesta_texto:
+            lineas.append(f"PACIENTE: {i.respuesta_texto}")
+        if i.cierre_generado:
+            lineas.append(f"{nombre_personaje}: {i.cierre_generado}")
+    return "\n".join(lineas)
+
+
+def _enviar_guion(
+    db: Session, guion: Guion, paciente_id: int, ahora: datetime,
+    contexto_respuesta: str | None = None, transcripcion: str | None = None,
+) -> Interaccion:
+    """Manda el guion tal cual, salvo que venga con `contexto_respuesta` — la
+    respuesta libre del paciente que disparó este guion como destino de una
+    rama. En ese caso, el texto que se manda no es el template a secas: se le
+    pide a la IA que lo complete con lo que el paciente haya traído de más
+    (ver respuesta_guion.py), sin tocar el contenido ya escrito a mano. Para
+    eso necesita `transcripcion` — toda la charla hasta ahora, no solo el
+    último mensaje — así no contradice ni vuelve ambiguo algo que ya había
+    quedado claro antes (ej. que el plan es "hoy")."""
     guion.estado = EstadoGuion.enviado
+    texto_final = guion.texto_mensaje
+    if contexto_respuesta is not None:
+        texto_final = adaptar_mensaje_guion(
+            guion.texto_mensaje, transcripcion or guion.texto_mensaje, guion.personaje
+        )
+
     interaccion = Interaccion(
         guion_id=guion.id,
         paciente_id=paciente_id,
-        texto_enviado=guion.texto_mensaje,
+        texto_enviado=texto_final,
         timestamp_envio=ahora,
     )
     db.add(interaccion)
@@ -84,7 +124,7 @@ def _enviar_guion(db: Session, guion: Guion, paciente_id: int, ahora: datetime) 
         db,
         paciente,
         titulo=guion.personaje.nombre,
-        cuerpo=guion.texto_mensaje,
+        cuerpo=texto_final,
         url=f"/chat/{paciente_id}/{guion.personaje_id}",
     )
     return interaccion
@@ -93,7 +133,7 @@ def _enviar_guion(db: Session, guion: Guion, paciente_id: int, ahora: datetime) 
 def _activar_guion_siguiente(guion_siguiente: Guion | None, ahora: datetime) -> None:
     """El árbol de guiones no se autorregula por fecha: el scheduler manda
     cualquier guion en `borrador` cuya fecha ya pasó, sea o no el destino de
-    una rama todavía no alcanzada. Por eso, apenas una rama/opción elige un
+    una rama todavía no alcanzada. Por eso, apenas una rama elige un
     guion siguiente, lo activamos ya (borrador + fecha inmediata) sin
     importar su estado o fecha previa — así nunca dispara por su cuenta
     antes de ser alcanzado, ni queda trabado si ya se había usado."""
@@ -102,25 +142,8 @@ def _activar_guion_siguiente(guion_siguiente: Guion | None, ahora: datetime) -> 
         guion_siguiente.fecha_programada = ahora
 
 
-def registrar_respuesta_opciones(
-    interaccion: Interaccion, opcion: OpcionRespuesta, ahora: datetime | None = None
-) -> Guion | None:
-    """Paso 4: el paciente eligió un quick reply — no hace falta matching.
-    Devuelve el guion_siguiente (reabierto en `borrador` si hacía falta) o
-    None si la rama es terminal."""
-    if opcion.guion_id != interaccion.guion_id:
-        raise ValueError("La opción no pertenece al guion de esta interacción.")
-
-    ahora = ahora or datetime.now(timezone.utc)
-    interaccion.respuesta_texto = opcion.texto_opcion
-    interaccion.opcion_elegida_id = opcion.id
-    interaccion.timestamp_respuesta = ahora
-    _activar_guion_siguiente(opcion.guion_siguiente, ahora)
-    return opcion.guion_siguiente
-
-
 def registrar_respuesta_libre(
-    interaccion: Interaccion, texto_respuesta: str, ahora: datetime | None = None
+    db: Session, interaccion: Interaccion, texto_respuesta: str, ahora: datetime | None = None
 ) -> Guion | None:
     """Paso 5: la respuesta es texto libre. Usa el clasificador de IA
     (adaptador aislado) para elegir la rama; si no matchea con confianza
@@ -128,7 +151,14 @@ def registrar_respuesta_libre(
     Si ese fallback no tiene destino armado a mano, no hay nada escrito
     para seguir — en vez de dejar la conversación sin contestar nada, la
     IA genera un cierre breve (ver cierre_guion.py). Un fallback CON
-    destino configurado sigue funcionando exactamente igual que siempre."""
+    destino configurado sigue funcionando exactamente igual que siempre.
+
+    El guion destino se manda ya mismo (no se deja para el próximo tick del
+    scheduler) pasándole el texto de esta respuesta como contexto, así la IA
+    puede completar el mensaje preparado con algo que el paciente haya
+    traído de más (ver respuesta_guion.py) — salvo que el destino sea un
+    guion de entrada manual, que tiene que seguir yendo a la bandeja tal
+    cual, sin adaptar nada de antemano."""
     guion = interaccion.guion
     ramas = [r for r in guion.ramas_libres if not r.es_fallback]
     resultado = clasificar_respuesta(
@@ -150,9 +180,20 @@ def registrar_respuesta_libre(
     interaccion.timestamp_respuesta = ahora
 
     if rama_elegida.es_fallback and rama_elegida.guion_siguiente_id is None:
-        mensaje_anterior = interaccion.texto_enviado or guion.texto_mensaje
-        interaccion.cierre_generado = generar_cierre(mensaje_anterior, texto_respuesta, guion.personaje)
+        transcripcion = _transcripcion_guion(db, guion.personaje_id, interaccion.paciente_id)
+        interaccion.cierre_generado = generar_cierre(transcripcion, texto_respuesta, guion.personaje)
         return None
 
-    _activar_guion_siguiente(rama_elegida.guion_siguiente, ahora)
-    return rama_elegida.guion_siguiente
+    destino = rama_elegida.guion_siguiente
+    if destino is None:
+        return None
+    if destino.es_entrada and destino.modo_envio == ModoEnvio.manual:
+        _activar_guion_siguiente(destino, ahora)
+        return destino
+
+    transcripcion = _transcripcion_guion(db, guion.personaje_id, interaccion.paciente_id)
+    _enviar_guion(
+        db, destino, interaccion.paciente_id, ahora,
+        contexto_respuesta=texto_respuesta, transcripcion=transcripcion,
+    )
+    return destino

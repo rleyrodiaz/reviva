@@ -25,6 +25,11 @@
                 <textarea name="contenido" rows="6">{{ historia.contenido }}</textarea>
                 <label>Tiempo máximo de charla (minutos)</label>
                 <input type="text" name="duracion_maxima_minutos" value="{{ historia.duracion_maxima_minutos }}">
+                <p class="hint">
+                    Es un límite real: la IA sabe cuánto tiempo pasó de verdad y, si se llega a este número sin que
+                    ella haya cerrado la charla sola, la app la corta con una despedida. Pensalo con criterio — 15
+                    minutos ya es bastante para esta app, no un valor por defecto para dejar sin mirar.
+                </p>
                 <p class="hint-guard">
                     ⚠ La IA solo puede usar lo escrito acá y lo que aporte el paciente durante la charla — si le
                     falta un dato, pregunta en vez de inventarlo. Tampoco puede cerrar la charla con algo que
@@ -35,10 +40,56 @@
         </div>
 
         <div class="card">
+            <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ historia.id }}/configuracion"
+                  style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                <div style="flex:1; min-width:160px;">
+                    <label>Modo</label>
+                    <select name="modo_envio" id="historia-modo">
+                        {% for m in modos_envio %}
+                        <option value="{{ m.value }}" {% if m == historia.modo_envio %}selected{% endif %}>{{ m.value }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="flex:1; min-width:200px;" id="historia-fecha-wrap">
+                    <label>Fecha y hora (solo automático)</label>
+                    <input type="datetime-local" name="fecha_programada" id="historia-fecha" value="{{ fecha_programada_valor }}">
+                </div>
+                <button class="btn chico" type="submit">Guardar</button>
+            </form>
+            <p class="hint">
+                En manual, "Proponer esta historia ahora" no le llega al paciente directo: genera el primer mensaje
+                y lo deja esperando en la <a href="/admin/familias/{{ familia_id }}/bandeja">Bandeja de aprobación</a>,
+                igual que un guion manual. En automático, apenas se cumple la fecha el sistema la dispara directo,
+                sin pasar por la bandeja — una vez que se dispara, la fecha se limpia, así que para repetirla hay
+                que programar una nueva.
+            </p>
+            {% if historia.mensaje_propuesto %}
+            <p class="hint-guard">
+                ⏳ Hay una propuesta esperando aprobación en la
+                <a href="/admin/familias/{{ familia_id }}/bandeja">Bandeja</a> desde el
+                {{ historia.propuesta_en.strftime("%d/%m %H:%M") }}.
+            </p>
+            {% endif %}
+            <script>
+            (function () {
+                var modo = document.getElementById("historia-modo");
+                var wrap = document.getElementById("historia-fecha-wrap");
+                function sync() { wrap.style.display = modo.value === "automatico" ? "" : "none"; }
+                modo.addEventListener("change", sync);
+                sync();
+            })();
+            </script>
+        </div>
+
+        <div class="card">
+            {% if es_admin_de(user, familia_id) %}
             <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ historia.id }}/borrar"
                   data-confirm="¿Borrar esta historia y todas sus sesiones? No se puede deshacer.">
                 <button class="btn danger" type="submit" style="width:100%;">Borrar historia</button>
             </form>
+            {% else %}
+            <button type="button" class="btn danger" style="width:100%;" data-aviso="{{ mensaje_requiere_admin }}">Borrar historia</button>
+            {% endif %}
         </div>
     </div>
 
@@ -46,9 +97,14 @@
         <div class="card">
             <div class="card-header-row">
                 <h2>Sesiones ({{ sesiones|length }})</h2>
+                {% set texto_boton = "Proponer (a la bandeja)" if historia.modo_envio.value == "manual" else "Proponer esta historia ahora" %}
+                {% if es_admin_de(user, familia_id) %}
                 <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ historia.id }}/proponer">
-                    <button class="btn chico" type="submit">Proponer esta historia ahora</button>
+                    <button class="btn chico" type="submit">{{ texto_boton }}</button>
                 </form>
+                {% else %}
+                <button type="button" class="btn chico" data-aviso="{{ mensaje_requiere_admin }}">{{ texto_boton }}</button>
+                {% endif %}
             </div>
             <p class="hint">Arranca una charla nueva ya mismo: la IA genera el primer mensaje de {{ personaje.nombre }} invitando a hablar de esto.</p>
             {% if not sesiones %}

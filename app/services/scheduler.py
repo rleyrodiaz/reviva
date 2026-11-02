@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.db import get_db
 from app.models.paciente import Paciente
-from app.services import motor
+from app.services import historia_engine, motor
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,18 @@ def _tick() -> None:
             except Exception:
                 logger.exception(
                     "Error procesando guiones vencidos para paciente %s", paciente.id
+                )
+            try:
+                propuestas = historia_engine.procesar_historias_vencidas(db, paciente.id)
+                if propuestas:
+                    logger.info(
+                        "Scheduler: %d historia(s) propuesta(s) para paciente %s",
+                        len(propuestas),
+                        paciente.id,
+                    )
+            except Exception:
+                logger.exception(
+                    "Error procesando historias vencidas para paciente %s", paciente.id
                 )
 
 

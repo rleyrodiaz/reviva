@@ -2,13 +2,37 @@
 {% block title %}Bandeja de aprobación{% endblock %}
 {% block contenido %}
 <p><a href="/admin/familias/{{ familia_id }}">&larr; volver</a></p>
+<div id="contenido-modal">
 <div class="inbox-header">
-    <span class="count">{{ pendientes|length }} guion(es) esperando tu aprobación</span>
+    <span class="count">{{ pendientes|length + pendientes_historias|length }} elemento(s) esperando tu aprobación</span>
 </div>
 
-{% if not pendientes %}
-<div class="card"><p class="hint">No hay guiones esperando aprobación.</p></div>
+{% if not pendientes and not pendientes_historias %}
+<div class="card"><p class="hint">No hay nada esperando aprobación.</p></div>
 {% endif %}
+
+{% for h in pendientes_historias %}
+<div class="inbox-card">
+    <div class="inbox-top">
+        <div class="avatar">{{ h.personaje.nombre[0] }}</div>
+        <span class="name">{{ h.personaje.nombre }} — Historia "{{ h.titulo }}"</span>
+        <span class="when">#{{ h.id }}</span>
+    </div>
+    <form method="post"
+          action="/admin/familias/{{ familia_id }}/personajes/{{ h.personaje_id }}/historias/{{ h.id }}/bandeja/aprobar">
+        <textarea name="mensaje" rows="2">{{ h.mensaje_propuesto }}</textarea>
+        <div class="inbox-foot">
+            <button class="btn" type="submit">Aprobar y enviar ahora</button>
+        </div>
+    </form>
+    <form method="post"
+          action="/admin/familias/{{ familia_id }}/personajes/{{ h.personaje_id }}/historias/{{ h.id }}/bandeja/desactivar"
+          style="margin-top:8px;"
+          data-confirm="¿Desactivar esta propuesta? No se manda nada — podés proponerla de nuevo cuando quieras.">
+        <button class="btn chico quiet" type="submit">Desactivar</button>
+    </form>
+</div>
+{% endfor %}
 
 {% for g in pendientes %}
 <div class="inbox-card">
@@ -30,4 +54,5 @@
     </form>
 </div>
 {% endfor %}
+</div>
 {% endblock %}

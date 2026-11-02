@@ -5,7 +5,6 @@ from app.models.paciente import Paciente
 from app.models.personaje import Personaje
 from app.models.conversacion import Conversacion
 from app.models.guion import Guion
-from app.models.opcion_respuesta import OpcionRespuesta
 from app.models.rama_respuesta_libre import RamaRespuestaLibre
 from app.models.interaccion import Interaccion
 from app.models.push_subscription import PushSubscription
@@ -23,7 +22,6 @@ __all__ = [
     "Personaje",
     "Conversacion",
     "Guion",
-    "OpcionRespuesta",
     "RamaRespuestaLibre",
     "Interaccion",
     "PushSubscription",

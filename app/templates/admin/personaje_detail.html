@@ -3,7 +3,7 @@
 {% block contenido %}
 <p><a href="/admin/familias/{{ familia_id }}">&larr; volver</a></p>
 <h1>{{ personaje.nombre }}</h1>
-<p class="hint">{{ personaje.relacion_con_paciente or "" }} — {{ personaje.descripcion or "" }}</p>
+<p class="hint">{{ personaje.relacion_con_paciente or "" }}</p>
 
 <div class="mode-tabs">
     <a class="mode-tab active" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}">Guionadas</a>
@@ -25,8 +25,6 @@
                     <label>Foto (URL)</label>
                     <input type="text" name="foto" value="{{ personaje.foto or '' }}" placeholder="/static/images/archivo.jpg">
                     <p class="hint">Si la imagen está en tu PC, copiala a <code>app/static/images/</code> y poné acá <code>/static/images/archivo.jpg</code>.</p>
-                    <label>Descripción / historia compartida</label>
-                    <textarea name="descripcion" rows="2">{{ personaje.descripcion or '' }}</textarea>
                     <label>Tono de escritura</label>
                     <textarea name="tono_escritura" rows="2">{{ personaje.tono_escritura or '' }}</textarea>
                     <button class="btn" type="submit">Guardar cambios</button>
@@ -71,11 +69,15 @@
                         </form>
                         <p class="hint">Reactiva el/los guion(es) de entrada con esa fecha.</p>
                     </details>
+                    {% if es_admin_de(user, familia_id) %}
                     <form method="post"
                           action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}/borrar"
-                          data-confirm="¿Borrar esta conversación completa, con todos sus guiones, opciones y ramas?">
+                          data-confirm="¿Borrar esta conversación completa, con todos sus nodos y ramas?">
                         <button class="btn chico danger" type="submit">Borrar</button>
                     </form>
+                    {% else %}
+                    <button type="button" class="btn chico danger" data-aviso="{{ mensaje_requiere_admin }}">Borrar</button>
+                    {% endif %}
                 </div>
             </div>
             {% else %}

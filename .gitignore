@@ -11,7 +11,7 @@ env/
 
 # Secrets and local configurations
 .env
-.env.example
+# .env.example   está sin claves, es de ejemplo
 vapid_private_key.pem
 
 # Temporary Office files

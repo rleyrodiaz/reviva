@@ -13,11 +13,11 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.db import get_db
-from app.models.enums import EstadoGuion, ModoEnvio, TipoRespuesta
+from app.models.conversacion import Conversacion
+from app.models.enums import EstadoGuion, ModoEnvio
 from app.models.familia import Familia
 from app.models.guion import Guion
 from app.models.interaccion import Interaccion
-from app.models.opcion_respuesta import OpcionRespuesta
 from app.models.paciente import Paciente
 from app.models.personaje import Personaje
 from app.models.rama_respuesta_libre import RamaRespuestaLibre
@@ -53,25 +53,29 @@ def _seed(db):
     personaje = Personaje(
         familia_id=familia.id,
         nombre="Carlos",
-        descripcion="Amigo de la infancia",
+        relacion_con_paciente="Amigo de la infancia",
         tono_escritura="Informal, cariñoso, usa 'vos'",
     )
     db.add_all([paciente, personaje])
     db.flush()
 
+    conversacion = Conversacion(personaje_id=personaje.id, nombre="Mar del Plata")
+    db.add(conversacion)
+    db.flush()
+
     g_terminal_si = Guion(
         personaje_id=personaje.id,
+        conversacion_id=conversacion.id,
         fecha_programada=ahora + timedelta(days=1),
         texto_mensaje="¡Qué lindo! Fue un viaje inolvidable.",
-        tipo_respuesta=TipoRespuesta.libre,
         modo_envio=ModoEnvio.manual,
         estado=EstadoGuion.borrador,
     )
     g_terminal_no = Guion(
         personaje_id=personaje.id,
+        conversacion_id=conversacion.id,
         fecha_programada=ahora + timedelta(days=1),
         texto_mensaje="No hay drama, fue hace tiempo. ¡Nos vemos pronto!",
-        tipo_respuesta=TipoRespuesta.libre,
         modo_envio=ModoEnvio.manual,
         estado=EstadoGuion.borrador,
     )
@@ -80,43 +84,43 @@ def _seed(db):
 
     g_quien_manejaba = Guion(
         personaje_id=personaje.id,
+        conversacion_id=conversacion.id,
         fecha_programada=ahora + timedelta(days=1),
         texto_mensaje="¡Qué lindo recuerdo! ¿Te acordás quién manejaba?",
-        tipo_respuesta=TipoRespuesta.opciones,
         modo_envio=ModoEnvio.manual,
         estado=EstadoGuion.borrador,
     )
     db.add(g_quien_manejaba)
     db.flush()
     db.add_all([
-        OpcionRespuesta(guion_id=g_quien_manejaba.id, texto_opcion="Vos manejabas",
-                         guion_siguiente_id=g_terminal_si.id),
-        OpcionRespuesta(guion_id=g_quien_manejaba.id, texto_opcion="No me acuerdo",
-                         guion_siguiente_id=g_terminal_no.id),
+        RamaRespuestaLibre(guion_id=g_quien_manejaba.id, criterio="El paciente dice que manejaba él",
+                            guion_siguiente_id=g_terminal_si.id),
+        RamaRespuestaLibre(guion_id=g_quien_manejaba.id, es_fallback=True,
+                            guion_siguiente_id=g_terminal_no.id),
     ])
 
-    g_fallback_quick_reply = Guion(
+    g_fallback = Guion(
         personaje_id=personaje.id,
+        conversacion_id=conversacion.id,
         fecha_programada=ahora + timedelta(days=1),
         texto_mensaje="¿Te acordás del viaje a Mar del Plata en el Renault?",
-        tipo_respuesta=TipoRespuesta.opciones,
         modo_envio=ModoEnvio.manual,
         estado=EstadoGuion.borrador,
     )
-    db.add(g_fallback_quick_reply)
+    db.add(g_fallback)
     db.flush()
     db.add_all([
-        OpcionRespuesta(guion_id=g_fallback_quick_reply.id, texto_opcion="Sí",
-                         guion_siguiente_id=g_quien_manejaba.id),
-        OpcionRespuesta(guion_id=g_fallback_quick_reply.id, texto_opcion="No",
-                         guion_siguiente_id=g_terminal_no.id),
+        RamaRespuestaLibre(guion_id=g_fallback.id, criterio="El paciente dice que sí se acuerda",
+                            guion_siguiente_id=g_quien_manejaba.id),
+        RamaRespuestaLibre(guion_id=g_fallback.id, es_fallback=True,
+                            guion_siguiente_id=g_terminal_no.id),
     ])
 
     g_inicial = Guion(
         personaje_id=personaje.id,
+        conversacion_id=conversacion.id,
         fecha_programada=ahora - timedelta(minutes=1),  # ya vencido
         texto_mensaje="¡Qué bárbaro que me acordé de aquella vez que fuimos a Mar del Plata!",
-        tipo_respuesta=TipoRespuesta.libre,
         modo_envio=ModoEnvio.automatico,
         estado=EstadoGuion.borrador,
     )
@@ -126,7 +130,7 @@ def _seed(db):
         RamaRespuestaLibre(guion_id=g_inicial.id, criterio="El paciente recuerda el viaje",
                             guion_siguiente_id=g_quien_manejaba.id),
         RamaRespuestaLibre(guion_id=g_inicial.id, es_fallback=True,
-                            guion_siguiente_id=g_fallback_quick_reply.id),
+                            guion_siguiente_id=g_fallback.id),
     ])
 
     db.flush()
@@ -148,14 +152,14 @@ def main():
         print(f"\n== Paso 2: paciente responde texto libre ==")
         respuesta = "Sí, me acuerdo, fuimos en el Renault de papá"
         print(f'  Paciente: "{respuesta}"')
-        siguiente = motor.registrar_respuesta_libre(interaccion, respuesta)
+        siguiente = motor.registrar_respuesta_libre(db, interaccion, respuesta)
         print(f"  Rama elegida -> guion siguiente #{siguiente.id}: \"{siguiente.texto_mensaje}\"")
 
-        print("\n== Paso 3: ese guion se envía y el paciente elige un quick reply ==")
+        print("\n== Paso 3: ese guion se envía y el paciente responde de nuevo con texto libre ==")
         interaccion2 = motor._enviar_guion(db, siguiente, paciente.id, datetime.now(timezone.utc))
-        opcion = siguiente.opciones[0]
-        print(f'  Paciente elige: "{opcion.texto_opcion}"')
-        siguiente2 = motor.registrar_respuesta_opciones(interaccion2, opcion)
+        respuesta2 = "Me acuerdo que manejaba yo"
+        print(f'  Paciente: "{respuesta2}"')
+        siguiente2 = motor.registrar_respuesta_libre(db, interaccion2, respuesta2)
         print(f"  -> guion siguiente #{siguiente2.id}: \"{siguiente2.texto_mensaje}\"")
 
         print("\nDemo OK — motor funcionando de punta a punta contra Postgres.")

@@ -1,24 +1,109 @@
 {% extends "base.html" %}
+{% block theme_toggle %}{% endblock %}
 {% block body %}
+{% set partes = request.url.path.split('/') %}
+{% set familia_actual_id = (partes[3]|int) if (partes|length > 3 and partes[1] == 'admin' and partes[2] == 'familias' and partes[3].isdigit()) else None %}
+{% set es_admin_aqui = familia_actual_id and es_admin_de(user, familia_actual_id) %}
+{% set ruta = request.url.path %}
+{% set base_familia = "/admin/familias/" ~ familia_actual_id %}
+{% set es_seccion_bandeja = familia_actual_id and ruta.startswith(base_familia ~ "/bandeja") %}
+{% set es_seccion_hechos = familia_actual_id and ruta.startswith(base_familia ~ "/hechos") %}
+{% set es_seccion_usuarios = familia_actual_id and ruta.startswith(base_familia ~ "/usuarios") %}
+{% set es_seccion_admin = familia_actual_id and (ruta.startswith(base_familia ~ "/activity-log") or ruta.startswith(base_familia ~ "/settings")) %}
+{% set es_seccion_dashboard = familia_actual_id and not (es_seccion_bandeja or es_seccion_hechos or es_seccion_usuarios or es_seccion_admin) %}
 <div class="topbar">
     <a class="brand" href="/admin/familias">
-        <span class="mark">C</span>
-        <strong>Cuaderno de Guiones</strong>
+        <span class="mark">RVV</span>
+        <strong>Reviva</strong>
     </a>
+    <button type="button" class="hamburguesa" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <div class="who">
-        {% if user.es_superadmin %}
-        <nav class="topnav">
-            <a href="/admin/activity-log">Activity log</a>
-            <a href="/admin/settings">Settings</a>
+        {% if familia_actual_id %}
+        <nav class="navlinks">
+            <a href="/admin/familias/{{ familia_actual_id }}" {% if es_seccion_dashboard %}class="activo"{% endif %}>Dashboard</a>
+            {% if es_admin_aqui %}
+            <a href="/admin/familias/{{ familia_actual_id }}/bandeja" data-modal-titulo="Bandeja de aprobación" {% if es_seccion_bandeja %}class="activo"{% endif %}>Bandeja</a>
+            {% endif %}
+            <a href="/admin/familias/{{ familia_actual_id }}/hechos" data-modal-titulo="Hechos de familia" {% if es_seccion_hechos %}class="activo"{% endif %}>Hechos</a>
+            {% if es_admin_aqui %}
+            <a href="/admin/familias/{{ familia_actual_id }}/usuarios" {% if es_seccion_usuarios %}class="activo"{% endif %}>Usuarios</a>
+            {% endif %}
         </nav>
+        {% if es_admin_aqui %}
+        <div class="dropdown">
+            <button type="button" class="dropdown-toggle {% if es_seccion_admin %}activo{% endif %}">Admin ▾</button>
+            <div class="dropdown-menu">
+                <a href="/admin/familias/{{ familia_actual_id }}/activity-log">Activity log</a>
+                <a href="/admin/familias/{{ familia_actual_id }}/settings">Settings</a>
+                {% if user.es_superadmin %}
+                <div class="dropdown-divider"></div>
+                <a href="/admin/settings">Settings global</a>
+                {% endif %}
+            </div>
+        </div>
         {% endif %}
-        <span>{{ user.nombre }}</span>
-        <form method="post" action="/logout"><button type="submit">Salir</button></form>
+        {% endif %}
+
+        {% if familia_actual_id %}
+        {% set nav_familias = familias_navbar(user, familia_actual_id) %}
+        {% if user.es_superadmin or nav_familias.todas|length > 1 %}
+        <div class="dropdown">
+            <button type="button" class="dropdown-toggle familia-pill">
+                <span class="dot"></span>{{ nav_familias.actual_nombre or "Familia" }} ▾
+            </button>
+            <div class="dropdown-menu">
+                {% for f in nav_familias.todas %}
+                <a href="/admin/familias/{{ f.id }}" {% if f.id == familia_actual_id %}class="activo"{% endif %}>{{ f.nombre }}</a>
+                {% endfor %}
+                {% if user.es_superadmin %}
+                <div class="dropdown-divider"></div>
+                <a href="/admin/familias">Gestionar familias</a>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <span class="familia-pill"><span class="dot"></span>{{ nav_familias.actual_nombre or "Familia" }}</span>
+        {% endif %}
+        {% endif %}
+
+        {% if not familia_actual_id and user.es_superadmin %}
+        <a href="/admin/settings" class="topnav-link">Settings global</a>
+        {% endif %}
+
+        <div class="user-cluster">
+            <button type="button" id="theme-toggle" class="theme-toggle theme-toggle-inline" aria-label="Cambiar a modo noche" title="Cambiar entre modo día y modo noche">
+                <svg class="icon-sol" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="4.2"/>
+                    <path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>
+                </svg>
+                <svg class="icon-luna" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 14.5A8.5 8.5 0 119.5 4a7 7 0 1010.5 10.5Z"/>
+                </svg>
+            </button>
+            <span class="user-name">{{ user.nombre }}</span>
+            <form method="post" action="/logout"><button type="submit">Salir</button></form>
+        </div>
     </div>
 </div>
 <div class="contenido">
     {% block contenido %}{% endblock %}
 </div>
+
+<script>
+(function () {
+    document.querySelectorAll(".dropdown-toggle").forEach(function (boton) {
+        boton.addEventListener("click", function (ev) {
+            ev.stopPropagation();
+            var abierto = boton.parentElement.classList.contains("abierto");
+            document.querySelectorAll(".dropdown.abierto").forEach(function (d) { d.classList.remove("abierto"); });
+            if (!abierto) boton.parentElement.classList.add("abierto");
+        });
+    });
+    document.addEventListener("click", function () {
+        document.querySelectorAll(".dropdown.abierto").forEach(function (d) { d.classList.remove("abierto"); });
+    });
+})();
+</script>
 
 <dialog id="dialog-confirmar">
     <h2>¿Confirmás?</h2>
@@ -30,12 +115,20 @@
 </dialog>
 
 <dialog id="dialog-prompt">
-    <h2>Conectar guiones</h2>
+    <h2>Mapa de la conversación</h2>
     <label id="dialog-prompt-titulo" for="dialog-prompt-input">Texto</label>
     <input type="text" id="dialog-prompt-input">
     <div class="modal-actions">
         <button type="button" class="btn quiet" id="dialog-prompt-cancelar">Cancelar</button>
         <button type="button" class="btn" id="dialog-prompt-aceptar">Aceptar</button>
+    </div>
+</dialog>
+
+<dialog id="dialog-modal-contenido" class="modal-ancho">
+    <h2 id="dialog-modal-contenido-titulo">Cargando…</h2>
+    <div id="dialog-modal-contenido-cuerpo"><p class="hint">Cargando…</p></div>
+    <div class="modal-actions">
+        <button type="button" class="btn quiet" onclick="document.getElementById('dialog-modal-contenido').close()">Cerrar</button>
     </div>
 </dialog>
 

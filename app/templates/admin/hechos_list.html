@@ -3,13 +3,19 @@
 {% block contenido %}
 <p><a href="/admin/familias/{{ familia_id }}">&larr; volver</a></p>
 <h1>Hechos de familia</h1>
+<div id="contenido-modal">
 <p class="hint">
     Datos que el paciente contó durante alguna Historia y que podrían servir en otras — nunca se usan solos, tenés
     que aprobarlos primero. Solo se rescata lo que dijo el paciente, nunca lo que dijo el personaje.
 </p>
 
-<div class="card">
-    <h2>Pendientes ({{ pendientes|length }})</h2>
+<div class="tabs" data-tabs>
+    <button type="button" class="tab-btn" data-tab-btn="validados">Validados ({{ validados|length }})</button>
+    <button type="button" class="tab-btn activo" data-tab-btn="pendientes">Pendientes ({{ pendientes|length }})</button>
+    <button type="button" class="tab-btn" data-tab-btn="descartados">Descartados ({{ descartados|length }})</button>
+</div>
+
+<div class="card tab-panel" data-tab-panel="pendientes">
     {% if not pendientes %}
     <p class="hint">No hay nada nuevo para revisar.</p>
     {% endif %}
@@ -25,7 +31,7 @@
             <span class="when">{{ h.creado_en.strftime("%d/%m/%Y") }}</span>
             {% endif %}
         </div>
-        <p style="font-family:'Fraunces'; font-size:15.5px; margin:0 0 12px;">{{ h.texto }}</p>
+        <p style="font-family:var(--font-display); font-size:15.5px; margin:0 0 12px;">{{ h.texto }}</p>
         <div class="inbox-foot">
             <form method="post" action="/admin/familias/{{ familia_id }}/hechos/{{ h.id }}/descartar">
                 <button class="btn quiet" type="submit">Descartar</button>
@@ -38,8 +44,7 @@
     {% endfor %}
 </div>
 
-<div class="card">
-    <h2>Validados ({{ validados|length }})</h2>
+<div class="card tab-panel" data-tab-panel="validados" hidden>
     <p class="hint">Estos se le pasan a la IA en el prompt de cualquier historia de esta familia, si vienen al caso.</p>
     {% for h in validados %}
     <div class="conv-row">
@@ -56,8 +61,7 @@
     {% endfor %}
 </div>
 
-<div class="card">
-    <h2>Descartados ({{ descartados|length }})</h2>
+<div class="card tab-panel" data-tab-panel="descartados" hidden>
     <p class="hint">No se usan en ningún prompt, pero quedan guardados acá por si hace falta revisarlos de nuevo.</p>
     {% for h in descartados %}
     <div class="conv-row">
@@ -77,5 +81,6 @@
     {% else %}
     <p class="hint">Todavía no hay ninguno descartado.</p>
     {% endfor %}
+</div>
 </div>
 {% endblock %}

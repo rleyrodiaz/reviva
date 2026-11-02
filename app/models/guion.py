@@ -4,7 +4,7 @@ from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.enums import EstadoGuion, ModoEnvio, TipoRespuesta
+from app.models.enums import EstadoGuion, ModoEnvio
 
 
 class Guion(Base):
@@ -19,9 +19,6 @@ class Guion(Base):
     )
     fecha_programada: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     texto_mensaje: Mapped[str] = mapped_column(Text, nullable=False)
-    tipo_respuesta: Mapped[TipoRespuesta] = mapped_column(
-        Enum(TipoRespuesta, name="tipo_respuesta"), nullable=False
-    )
     modo_envio: Mapped[ModoEnvio] = mapped_column(
         Enum(ModoEnvio, name="modo_envio"), nullable=False, default=ModoEnvio.manual
     )
@@ -42,17 +39,12 @@ class Guion(Base):
     pos_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
     pos_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ancho: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    alto: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     personaje: Mapped["Personaje"] = relationship("Personaje", back_populates="guiones")
     conversacion: Mapped["Conversacion"] = relationship("Conversacion", back_populates="guiones")
     nodo_padre: Mapped["Guion | None"] = relationship(
         "Guion", remote_side="Guion.id", foreign_keys=[nodo_padre_id]
-    )
-    opciones: Mapped[list["OpcionRespuesta"]] = relationship(
-        "OpcionRespuesta",
-        back_populates="guion",
-        foreign_keys="OpcionRespuesta.guion_id",
-        cascade="all, delete-orphan",
     )
     ramas_libres: Mapped[list["RamaRespuestaLibre"]] = relationship(
         "RamaRespuestaLibre",

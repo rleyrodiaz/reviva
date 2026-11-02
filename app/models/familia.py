@@ -18,8 +18,16 @@ class Familia(Base):
     memberships: Mapped[list["FamiliaMembership"]] = relationship(
         "FamiliaMembership", back_populates="familia", cascade="all, delete-orphan"
     )
-    pacientes: Mapped[list["Paciente"]] = relationship("Paciente", back_populates="familia")
-    personajes: Mapped[list["Personaje"]] = relationship("Personaje", back_populates="familia")
+    # passive_deletes=True: al borrar una Familia, dejar que el
+    # ondelete=CASCADE de la FK haga el borrado en la base — sin esto,
+    # SQLAlchemy intenta por su cuenta poner familia_id en NULL en los hijos
+    # antes de borrar, lo que rompe contra la columna NOT NULL.
+    pacientes: Mapped[list["Paciente"]] = relationship(
+        "Paciente", back_populates="familia", passive_deletes=True
+    )
+    personajes: Mapped[list["Personaje"]] = relationship(
+        "Personaje", back_populates="familia", passive_deletes=True
+    )
     hechos_familiares: Mapped[list["HechoFamiliar"]] = relationship(
         "HechoFamiliar", back_populates="familia", cascade="all, delete-orphan"
     )

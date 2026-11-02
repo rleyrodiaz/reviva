@@ -39,6 +39,9 @@
                 {% else %}
                 <span class="stamp enviado" style="transform:none;">usada {{ h.sesiones|length }} vez(es)</span>
                 {% endif %}
+                {% if h.modo_envio.value == "automatico" and h.fecha_programada %}
+                · <span class="stamp pendiente_aprobacion" style="transform:none;">programada {{ h.fecha_programada.strftime("%d/%m %H:%M") }}</span>
+                {% endif %}
             </div>
             <div class="actions">
                 <a class="btn chico secundario" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ h.id }}">Abrir</a>
@@ -68,6 +71,10 @@
         <textarea name="contenido" rows="5" placeholder="- Fuimos en el Renault celeste de papá&#10;- Alguien se mareó en la ruta, paramos tres veces&#10;- ..."></textarea>
         <label>Tiempo máximo de charla (minutos)</label>
         <input type="text" name="duracion_maxima_minutos" value="10">
+        <p class="hint">
+            Es un límite real: si se llega a este tiempo sin que la charla haya cerrado sola, la app la corta con
+            una despedida. Pensalo con criterio para esta historia puntual.
+        </p>
         <div class="modal-actions">
             <button type="button" class="btn quiet" onclick="document.getElementById('modal-nueva-historia').close()">Cancelar</button>
             <button class="btn" type="submit">Crear historia</button>

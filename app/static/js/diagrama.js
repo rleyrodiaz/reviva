@@ -6,10 +6,12 @@
     if (!contenedor || !datosEl) return;
 
     var baseUrl = contenedor.dataset.baseUrl;
+    var esAdmin = contenedor.dataset.esAdmin === "true";
+    var mensajeRequiereAdmin = contenedor.dataset.mensajeRequiereAdmin;
     var datos = JSON.parse(datosEl.textContent);
     var nodos = datos.nodos, aristas = datos.aristas;
 
-    var ANCHO_DEFAULT = 190, ANCHO_MIN = 140, ALTO_NODO = 76, GAP_X = 34, GAP_Y = 70, MARGEN = 30;
+    var ANCHO_DEFAULT = 190, ANCHO_MIN = 140, ALTO_NODO = 76, ALTO_MIN = 50, GAP_X = 34, GAP_Y = 70, MARGEN = 30;
     var NS = "http://www.w3.org/2000/svg";
 
     var porId = {};
@@ -21,6 +23,7 @@
     var resizeObserver = null;
 
     function anchoDe(n) { return n.ancho || ANCHO_DEFAULT; }
+    function altoDe(n) { return n.alto || ALTO_NODO; }
 
     // ---- Layout automático (BFS por capas) para los nodos que todavía no
     // tienen una posición guardada — una vez que alguien los mueve, pos_x/
@@ -53,19 +56,21 @@
             return items.reduce(function (s, n) { return s + anchoDe(n) + GAP_X; }, -GAP_X);
         }
         var niveles = Object.keys(filas).map(Number).sort(function (a, b) { return a - b; });
-        niveles.forEach(function (l, filaIdx) {
+        var yFila = MARGEN;
+        niveles.forEach(function (l) {
             var fila = filas[l];
             var x = MARGEN;
+            var altoFila = fila.reduce(function (m, n) { return Math.max(m, altoDe(n)); }, ALTO_NODO);
             fila.forEach(function (n) {
-                n.pos_x = x; n.pos_y = MARGEN + filaIdx * (ALTO_NODO + GAP_Y);
+                n.pos_x = x; n.pos_y = yFila;
                 x += anchoDe(n) + GAP_X;
             });
+            yFila += altoFila + GAP_Y;
         });
         if (desconectados.length) {
-            var y = MARGEN + (niveles.length ? niveles.length * (ALTO_NODO + GAP_Y) : 0) + GAP_Y;
             var x = MARGEN;
             desconectados.forEach(function (n) {
-                n.pos_x = x; n.pos_y = y;
+                n.pos_x = x; n.pos_y = yFila;
                 x += anchoDe(n) + GAP_X;
             });
         }
@@ -79,12 +84,12 @@
         var maxX = 400, maxY = 300;
         nodos.forEach(function (n) {
             maxX = Math.max(maxX, n.pos_x + anchoDe(n) + MARGEN);
-            maxY = Math.max(maxY, n.pos_y + ALTO_NODO + MARGEN);
+            maxY = Math.max(maxY, n.pos_y + altoDe(n) + MARGEN);
         });
         return { ancho: maxX, alto: maxY };
     }
 
-    function centroInferior(n) { return { x: n.pos_x + anchoDe(n) / 2, y: n.pos_y + ALTO_NODO }; }
+    function centroInferior(n) { return { x: n.pos_x + anchoDe(n) / 2, y: n.pos_y + altoDe(n) }; }
     function centroSuperior(n) { return { x: n.pos_x + anchoDe(n) / 2, y: n.pos_y }; }
 
     function pathArista(origenN, destinoN) {
@@ -124,7 +129,7 @@
         fetch(baseUrl + "/guiones/" + n.id + "/posicion", {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: "pos_x=" + Math.round(n.pos_x) + "&pos_y=" + Math.round(n.pos_y) + "&ancho=" + (n.ancho || ""),
+            body: "pos_x=" + Math.round(n.pos_x) + "&pos_y=" + Math.round(n.pos_y) + "&ancho=" + (n.ancho || "") + "&alto=" + (n.alto || ""),
         }).catch(function () { /* se reintenta solo en el próximo movimiento */ });
     }
 
@@ -191,12 +196,14 @@
         handle.addEventListener("mousedown", function (ev) {
             ev.preventDefault();
             ev.stopPropagation();
-            var startX = ev.clientX;
-            var origAncho = anchoDe(n);
+            var startX = ev.clientX, startY = ev.clientY;
+            var origAncho = anchoDe(n), origAlto = altoDe(n);
             function mover(ev2) {
-                var dx = ev2.clientX - startX;
+                var dx = ev2.clientX - startX, dy = ev2.clientY - startY;
                 n.ancho = Math.max(ANCHO_MIN, origAncho + dx);
+                n.alto = Math.max(ALTO_MIN, origAlto + dy);
                 foCuerpo.setAttribute("width", n.ancho);
+                foCuerpo.setAttribute("height", n.alto);
                 actualizarAristasConectadasA(n.id);
             }
             function soltar() {
@@ -213,7 +220,7 @@
     function hacerConectable(n, div) {
         var conector = document.createElement("div");
         conector.className = "diagrama-conector";
-        conector.title = "Arrastrá hasta otro guion para conectar";
+        conector.title = "Arrastrá hasta otro nodo para conectar";
         div.appendChild(conector);
         conector.addEventListener("mousedown", function (ev) {
             ev.preventDefault();
@@ -242,20 +249,13 @@
                 if (!sobreCanvas) return;
                 var destinoId = divDestino ? Number(divDestino.dataset.id) : null;
                 if (destinoId === n.id) return;
-                var esLibre = n.tipo_respuesta !== "opciones";
 
                 function pedirEtiquetaYConectar() {
-                    var titulo = esLibre
-                        ? "Criterio de esta rama (dejalo vacío para el camino por defecto / fallback)"
-                        : "Texto de la opción";
+                    var titulo = "Criterio de esta rama (dejalo vacío para el camino por defecto / fallback)";
                     if (destinoId == null) titulo += " — este camino va a terminar en \"fin\"";
                     window.promptApp(titulo).then(function (etiqueta) {
                         if (etiqueta === null) return; // cancelado
                         var etiquetaLimpia = etiqueta.trim();
-                        if (!esLibre && !etiquetaLimpia) {
-                            window.avisarApp("Hace falta un texto para la opción.");
-                            return;
-                        }
                         return fetch(baseUrl + "/guiones/" + n.id + "/conectar", {
                             method: "POST",
                             headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -274,7 +274,7 @@
                 if (destinoId == null) {
                     // Soltar en un espacio vacío del lienzo crea un camino sin destino
                     // ("fin") — se confirma antes para que no se cree por accidente.
-                    window.confirmarApp("Este camino va a terminar la conversación acá (\"fin\"), sin otro guion después. ¿Seguir?").then(function (ok) {
+                    window.confirmarApp("Este camino va a terminar la conversación acá (\"fin\"), sin otro nodo después. ¿Seguir?").then(function (ok) {
                         if (ok) pedirEtiquetaYConectar();
                     });
                     return;
@@ -294,19 +294,19 @@
     }
 
     function duplicarNodo(n) {
-        window.confirmarApp("¿Duplicar este guion? Se crea una copia con sus opciones/ramas (mismos destinos).").then(function (ok) {
+        window.confirmarApp("¿Duplicar este nodo? Se crea una copia con sus ramas (mismos destinos).").then(function (ok) {
             if (!ok) return;
             return fetch(baseUrl + "/guiones/" + n.id + "/duplicar", { method: "POST" }).then(function (r) {
                 if (!r.ok) throw new Error();
-                // La copia trae sus propias opciones/ramas y necesita layout:
+                // La copia trae sus propias ramas y necesita layout:
                 // más simple recargar que armar todo ese estado a mano.
                 window.location.reload();
             });
-        }).catch(function () { window.avisarApp("No se pudo duplicar el guion."); });
+        }).catch(function () { window.avisarApp("No se pudo duplicar el nodo."); });
     }
 
     function reabrirNodo(n) {
-        window.promptApp("Nueva fecha y hora para reabrir este guion", "", "datetime-local").then(function (fecha) {
+        window.promptApp("Nueva fecha y hora para reabrir este nodo", "", "datetime-local").then(function (fecha) {
             if (!fecha) return;
             return fetch(baseUrl + "/guiones/" + n.id + "/reabrir", {
                 method: "POST",
@@ -317,18 +317,19 @@
                 n.estado = "borrador";
                 render();
             });
-        }).catch(function () { window.avisarApp("No se pudo reabrir el guion."); });
+        }).catch(function () { window.avisarApp("No se pudo reabrir el nodo."); });
     }
 
     function borrarNodo(n) {
-        window.confirmarApp("¿Borrar este guion? También se borran sus opciones/ramas y queda huérfano cualquier otro guion que lo tuviera como destino.").then(function (ok) {
+        if (!esAdmin) { window.avisarApp(mensajeRequiereAdmin); return; }
+        window.confirmarApp("¿Querés borrar el nodo #" + n.id + "? También se borran sus ramas y queda huérfano cualquier otro nodo que lo tuviera como destino.").then(function (ok) {
             if (!ok) return;
             return fetch(baseUrl + "/guiones/" + n.id + "/borrar", { method: "POST" }).then(function (r) {
                 if (!r.ok) throw new Error();
                 quitarNodoDelEstado(n.id);
                 render();
             });
-        }).catch(function () { window.avisarApp("No se pudo borrar el guion."); });
+        }).catch(function () { window.avisarApp("No se pudo borrar el nodo."); });
     }
 
     // ---- Menú "⋮" por nodo — un popover flotante fuera del SVG (el
@@ -342,31 +343,63 @@
         if (menuAbierto) { menuAbierto.remove(); menuAbierto = null; }
         document.removeEventListener("mousedown", cerrarMenuSiAfuera);
     }
-    function abrirMenu(n, boton) {
+    function abrirMenuGenerico(x, y, itemsDef) {
         cerrarMenu();
-        var rect = boton.getBoundingClientRect();
         var menu = document.createElement("div");
         menu.className = "diagrama-menu-popover";
-        menu.style.top = (rect.bottom + 4) + "px";
-        menu.style.left = (rect.right - 140) + "px";
-
-        function item(texto, onClick, claseExtra) {
+        menu.style.top = y + "px";
+        menu.style.left = x + "px";
+        itemsDef.forEach(function (it) {
             var b = document.createElement("button");
             b.type = "button";
-            b.textContent = texto;
-            if (claseExtra) b.className = claseExtra;
-            b.addEventListener("click", function () { cerrarMenu(); onClick(); });
+            b.textContent = it.texto;
+            if (it.clase) b.className = it.clase;
+            b.addEventListener("click", function () { cerrarMenu(); it.onClick(); });
             menu.appendChild(b);
-        }
-        item("Duplicar", function () { duplicarNodo(n); });
-        if (n.estado !== "borrador") {
-            item("Reabrir", function () { reabrirNodo(n); });
-        }
-        item("Borrar", function () { borrarNodo(n); }, "danger");
-
+        });
         document.body.appendChild(menu);
         menuAbierto = menu;
         document.addEventListener("mousedown", cerrarMenuSiAfuera);
+    }
+
+    function abrirMenu(n, boton) {
+        var rect = boton.getBoundingClientRect();
+        var itemsDef = [{ texto: "Duplicar", onClick: function () { duplicarNodo(n); } }];
+        if (n.estado !== "borrador") {
+            itemsDef.push({ texto: "Reabrir", onClick: function () { reabrirNodo(n); } });
+        }
+        itemsDef.push({ texto: "Borrar", onClick: function () { borrarNodo(n); }, clase: "danger" });
+        abrirMenuGenerico(rect.right - 140, rect.bottom + 4, itemsDef);
+    }
+
+    // ---- Menú al hacer click en una conexión (rama) del mapa: editar su
+    // criterio o borrarla. El fallback no entra acá — click en esa línea
+    // sigue yendo directo al aviso de "no se puede borrar" (borrarArista). ----
+    function abrirMenuArista(a, ev) {
+        abrirMenuGenerico(ev.clientX, ev.clientY, [
+            { texto: "Editar criterio", onClick: function () { editarCriterioArista(a); } },
+            { texto: "Borrar", onClick: function () { borrarArista(a); }, clase: "danger" },
+        ]);
+    }
+
+    function editarCriterioArista(a) {
+        window.promptApp("Criterio de esta rama", a.criterio || "").then(function (valor) {
+            if (valor === null) return; // cancelado
+            var criterioLimpio = valor.trim();
+            if (!criterioLimpio) { window.avisarApp("El criterio no puede quedar vacío."); return; }
+            return fetch(baseUrl + "/guiones/" + a.origen + "/ramas/" + a.id + "/editar", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: "criterio=" + encodeURIComponent(criterioLimpio),
+            }).then(function (r) {
+                if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || "error"); });
+                return r.json();
+            }).then(function (data) {
+                var idx = aristas.findIndex(function (x) { return x.id === data.arista.id && x.tipo === data.arista.tipo; });
+                if (idx >= 0) aristas[idx] = data.arista; else aristas.push(data.arista);
+                render();
+            });
+        }).catch(function (e) { window.avisarApp(e.message || "No se pudo guardar el criterio."); });
     }
 
     function hacerMenu(n, div) {
@@ -384,13 +417,13 @@
 
     function borrarArista(a) {
         if (a.fallback) {
-            window.avisarApp("El fallback no se puede borrar — todo guion de tipo libre necesita uno.");
+            window.avisarApp("El fallback no se puede borrar — todo nodo de tipo libre necesita uno.");
             return;
         }
+        if (!esAdmin) { window.avisarApp(mensajeRequiereAdmin); return; }
         window.confirmarApp("¿Borrar esta conexión?").then(function (ok) {
             if (!ok) return;
-            var tramo = a.tipo === "opcion" ? "opciones" : "ramas";
-            return fetch(baseUrl + "/guiones/" + a.origen + "/" + tramo + "/" + a.id + "/borrar", { method: "POST" }).then(function (r) {
+            return fetch(baseUrl + "/guiones/" + a.origen + "/ramas/" + a.id + "/borrar", { method: "POST" }).then(function (r) {
                 if (!r.ok) throw new Error();
                 aristas = aristas.filter(function (x) { return !(x.id === a.id && x.tipo === a.tipo); });
                 render();
@@ -480,7 +513,10 @@
             var hit = document.createElementNS(NS, "path");
             hit.setAttribute("d", d);
             hit.setAttribute("class", "diagrama-arista-hit");
-            hit.addEventListener("click", function () { borrarArista(a); });
+            hit.addEventListener("click", function (ev) {
+                if (a.fallback) { borrarArista(a); return; }
+                abrirMenuArista(a, ev);
+            });
             svg.appendChild(hit);
 
             var path = document.createElementNS(NS, "path");
@@ -510,7 +546,7 @@
             fo.setAttribute("x", n.pos_x);
             fo.setAttribute("y", n.pos_y);
             fo.setAttribute("width", anchoDe(n));
-            fo.setAttribute("height", ALTO_NODO);
+            fo.setAttribute("height", altoDe(n));
 
             var clases = ["diagrama-nodo", "estado-" + n.estado];
             if (n.es_entrada) clases.push("entrada");

@@ -3,4 +3,6 @@ class NeedsLogin(Exception):
 
 
 class AccessDenied(Exception):
-    pass
+    def __init__(self, mensaje: str = "No tenés permiso para hacer esto."):
+        self.mensaje = mensaje
+        super().__init__(mensaje)

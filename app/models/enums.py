@@ -7,11 +7,6 @@ class UserRole(str, enum.Enum):
     familiar = "familiar"
 
 
-class TipoRespuesta(str, enum.Enum):
-    libre = "libre"
-    opciones = "opciones"
-
-
 class ModoEnvio(str, enum.Enum):
     manual = "manual"
     automatico = "automatico"
@@ -52,10 +47,16 @@ class EstadoHechoFamiliar(str, enum.Enum):
 
 class AccionActividad(str, enum.Enum):
     usuario_login = "usuario_login"
+    familia_borrada = "familia_borrada"
+    usuario_agregado_a_familia = "usuario_agregado_a_familia"
+    rol_cambiado = "rol_cambiado"
+    usuario_quitado_de_familia = "usuario_quitado_de_familia"
     guion_creado = "guion_creado"
     guion_borrado = "guion_borrado"
     guion_aprobado = "guion_aprobado"
     guion_desactivado = "guion_desactivado"
+    historia_aprobada = "historia_aprobada"
+    historia_desactivada = "historia_desactivada"
     conversacion_configurada = "conversacion_configurada"
     db_inicializada = "db_inicializada"
     db_reset_parcial = "db_reset_parcial"

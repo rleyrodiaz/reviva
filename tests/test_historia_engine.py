@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
@@ -25,7 +26,7 @@ def escenario(db):
     paciente = Paciente(familia_id=familia.id, nombre="Paciente Test")
     personaje = Personaje(
         familia_id=familia.id, nombre="Barti", relacion_con_paciente="Nieto",
-        descripcion="Vive con su familia, estudiante.", tono_escritura="Cariñoso, informal",
+        tono_escritura="Cariñoso, informal",
     )
     db.add_all([paciente, personaje])
     db.flush()
@@ -163,3 +164,45 @@ def test_solo_hechos_validados_de_la_misma_familia_se_usan(db, escenario):
     hechos = historia_engine._hechos_validados(db, escenario["familia"].id)
 
     assert hechos == ["Validado propio"]
+
+
+def test_prompt_informa_minutos_reales_no_solo_cantidad_de_mensajes(escenario):
+    respuesta = '{"mensaje": "Che, ¿cómo estás?", "cerrar": false}'
+    with patch.object(historia_engine, "generar_texto", return_value=respuesta) as mock_generar:
+        historia_engine.generar_siguiente_mensaje(
+            escenario["historia"], escenario["personaje"], [], minutos_transcurridos=7,
+        )
+    prompt_usado = mock_generar.call_args.args[0]
+    assert "7 de los 10 minutos" in prompt_usado
+
+
+def test_registrar_respuesta_fuerza_cierre_al_pasarse_del_tiempo_aunque_la_ia_diga_que_no(db, escenario):
+    """El backstop real: si ya se pasó la duración máxima, la sesión se
+    cierra sí o sí, aunque el modelo (mockeado acá) devuelva cerrar=false —
+    nunca queda a su criterio cuando se acabó el tiempo de verdad."""
+    with patch.object(historia_engine, "generar_texto", return_value='{"mensaje": "Hola!", "cerrar": false}'):
+        sesion = historia_engine.iniciar_sesion(db, escenario["historia"], escenario["paciente"].id)
+    # Simula que la sesión arrancó hace más de los 10 minutos configurados.
+    sesion.iniciada_en = datetime.now(timezone.utc) - timedelta(minutes=15)
+    db.flush()
+
+    with _SIN_HECHOS, patch.object(
+        historia_engine, "generar_texto", return_value='{"mensaje": "Todo bien!", "cerrar": false}',
+    ) as mock_generar:
+        historia_engine.registrar_respuesta(db, sesion, "Todo bien, ¿y vos?")
+
+    prompt_usado = mock_generar.call_args.args[0]
+    assert "ÚLTIMO" in prompt_usado
+    assert sesion.estado == EstadoHistoriaSesion.finalizada
+
+
+def test_registrar_respuesta_no_fuerza_cierre_si_todavia_no_paso_el_tiempo(db, escenario):
+    with patch.object(historia_engine, "generar_texto", return_value='{"mensaje": "Hola!", "cerrar": false}'):
+        sesion = historia_engine.iniciar_sesion(db, escenario["historia"], escenario["paciente"].id)
+
+    with _SIN_HECHOS, patch.object(
+        historia_engine, "generar_texto", return_value='{"mensaje": "Todo bien!", "cerrar": false}',
+    ):
+        historia_engine.registrar_respuesta(db, sesion, "Todo bien, ¿y vos?")
+
+    assert sesion.estado == EstadoHistoriaSesion.activa

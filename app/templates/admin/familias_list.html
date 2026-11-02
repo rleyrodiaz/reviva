@@ -12,12 +12,20 @@
     <p class="hint">Todavía no administrás ninguna familia.</p>
     {% else %}
     <table>
-        <tr><th>Nombre</th><th>Alta</th><th></th></tr>
+        <tr><th>Nombre</th><th>Alta</th><th></th><th></th></tr>
         {% for f in familias %}
         <tr>
             <td>{{ f.nombre }}</td>
             <td>{{ f.fecha_alta.strftime("%d/%m/%Y") }}</td>
             <td><a class="btn chico secundario" href="/admin/familias/{{ f.id }}">Entrar</a></td>
+            <td>
+                {% if user.es_superadmin %}
+                <form method="post" action="/admin/familias/{{ f.id }}/borrar"
+                      data-confirm="¿Borrar la familia &quot;{{ f.nombre }}&quot;? Se borran también sus personajes, conversaciones, guiones, paciente e historial. No se puede deshacer.">
+                    <button class="btn chico danger" type="submit">Borrar</button>
+                </form>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </table>

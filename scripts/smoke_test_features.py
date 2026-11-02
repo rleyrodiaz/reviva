@@ -23,7 +23,6 @@ r = client.post(
     data={
         "nombre": "Carlos Editado",
         "foto": "/static/images/aruiz.jpeg",
-        "descripcion": "desc nueva",
         "relacion_con_paciente": "Amigo de toda la vida",
         "tono_escritura": "Informal",
     },

@@ -63,7 +63,7 @@ def require_user(user: Usuario | None = Depends(get_current_user)) -> Usuario:
 
 def require_superadmin(user: Usuario = Depends(require_user)) -> Usuario:
     if not user.es_superadmin:
-        raise AccessDenied()
+        raise AccessDenied("Esta sección es exclusiva de superadmin.")
     return user
 
 
@@ -73,7 +73,22 @@ def require_familia_access(familia_id: int, user: Usuario) -> None:
     if user.es_superadmin:
         return
     if not any(m.familia_id == familia_id for m in user.memberships):
-        raise AccessDenied()
+        raise AccessDenied("No pertenecés a esta familia.")
+
+
+def require_familia_member(familia_id: int, user: Usuario = Depends(require_user)) -> Usuario:
+    """Cualquier miembro de la familia, sea admin_familia o familiar — para
+    ver/crear/editar contenido. Borrados y aprobaciones (bandeja, historias,
+    Usuarios, Settings, Activity log) siguen pidiendo require_admin_familia."""
+    require_familia_access(familia_id, user)
+    return user
+
+
+MENSAJE_REQUIERE_ADMIN = (
+    "Esta acción (borrar, aprobar, o gestionar Usuarios/Settings/Activity log) "
+    "requiere el rol de administrador de la familia. Pedile a un admin_familia "
+    "de tu familia que la haga, o que te suba el rol en Usuarios."
+)
 
 
 def require_admin_familia(familia_id: int, user: Usuario = Depends(require_user)) -> Usuario:
@@ -82,7 +97,7 @@ def require_admin_familia(familia_id: int, user: Usuario = Depends(require_user)
         return user
     membership = next((m for m in user.memberships if m.familia_id == familia_id), None)
     if membership is None or membership.rol != UserRole.admin_familia:
-        raise AccessDenied()
+        raise AccessDenied(MENSAJE_REQUIERE_ADMIN)
     return user
 
 

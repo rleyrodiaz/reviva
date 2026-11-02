@@ -18,7 +18,7 @@ familia_url = re.search(r'href="(/admin/familias/\d+)"', r.text).group(1)
 
 r = client.post(
     f"{familia_url}/personajes",
-    data={"nombre": "Marta", "foto": "", "descripcion": "", "relacion_con_paciente": "Hermana", "tono_escritura": ""},
+    data={"nombre": "Marta", "foto": "", "relacion_con_paciente": "Hermana", "tono_escritura": ""},
 )
 personaje_url = re.search(r'"(/admin/familias/\d+/personajes/\d+)"', r.text[r.text.find("Marta") - 300:])
 personaje_url = re.search(r'"(/admin/familias/\d+/personajes/\d+)"', r.text.split("Marta")[0][-300:]).group(1) \

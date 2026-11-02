@@ -20,11 +20,18 @@ templates.env.globals["static_version"] = static_version
 
 
 def _home_url(user: Usuario, db: Session) -> str:
-    # Con una sola familia propia vamos directo a ella, como siempre — el
+    # Con una sola familia propia vamos directo a ella, como siempre. Con
+    # más de una, directo a la última que visitó (si todavía es suya). El
     # listado de familias solo hace falta mostrarlo cuando hay que elegir
-    # (superadmin, o un admin_familia con más de una familia).
+    # por primera vez, o para superadmin, que gestiona todas.
+    if user.es_superadmin:
+        return "/admin/familias"
     familias = list_familias_propias(user, db)
-    if not user.es_superadmin and len(familias) == 1:
+    if len(familias) == 1:
+        return f"/admin/familias/{familias[0].id}"
+    if len(familias) > 1:
+        if user.ultima_familia_id and any(f.id == user.ultima_familia_id for f in familias):
+            return f"/admin/familias/{user.ultima_familia_id}"
         return f"/admin/familias/{familias[0].id}"
     return "/admin/familias"
 

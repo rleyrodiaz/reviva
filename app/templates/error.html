@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Acceso denegado{% endblock %}
+{% block body %}
+<div class="login-wrap">
+    <div class="login-panel">
+        <div class="login-copy">
+            <h1>Acceso denegado</h1>
+            <p>{{ mensaje }}</p>
+            <a class="btn" href="{{ volver }}">Volver</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

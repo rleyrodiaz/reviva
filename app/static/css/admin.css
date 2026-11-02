@@ -19,52 +19,115 @@
     --danger:#a23e2e;
     --danger-bg:#f1ded7;
     --shadow: 0 1px 0 rgba(43,35,24,.05), 0 6px 16px -10px rgba(43,35,24,.35);
+    --font-display: "Fraunces", Georgia, serif;
+    --font-body: "Work Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color-scheme: light;
 }
+/* Tema "noche": tomado del sistema visual pm- de la app Movies (fondo
+   casi negro, dorado como acento, Playfair Display + Inter) — se activa
+   solo o por preferencia del sistema operativo, o explícito via el botón
+   de cambio de tema (data-theme, persistido en localStorage). */
 @media (prefers-color-scheme: dark){
-    :root{
-        --paper:#1d1811;
-        --paper-raised:#2a2318;
-        --paper-sunken:#161209;
-        --ink:#eee3cc;
-        --ink-soft:#b7a789;
-        --ink-faint:#8a7c62;
-        --rule:#463c29;
-        --rule-strong:#5a4d34;
-        --accent:#57c19d;
-        --accent-ink:#0f2019;
-        --accent-soft:#243b32;
-        --status-borrador:#b3a488;
-        --status-borrador-bg:#332c1f;
-        --status-pendiente:#e2a75a;
-        --status-pendiente-bg:#3a2c17;
-        --status-enviado:#7fcba0;
-        --status-enviado-bg:#1f3327;
-        --danger:#e08b76;
-        --danger-bg:#3a241d;
-        --shadow: 0 1px 0 rgba(0,0,0,.2), 0 10px 24px -12px rgba(0,0,0,.6);
+    :root:not([data-theme="day"]){
+        --paper:#0D0D0F;
+        --paper-raised:#15151A;
+        --paper-sunken:#0D0D0F;
+        --ink:#F0EDE8;
+        --ink-soft:#B8B4BE;
+        --ink-faint:#7A7680;
+        --rule:#2A2A35;
+        --rule-strong:#7A7680;
+        --accent:#A78BFA;
+        --accent-ink:#15151A;
+        --accent-soft:rgba(167,139,250,.14);
+        --status-borrador:#7A7680;
+        --status-borrador-bg:rgba(122,118,128,.14);
+        --status-pendiente:#C8A96E;
+        --status-pendiente-bg:rgba(200,169,110,.14);
+        --status-enviado:#86efac;
+        --status-enviado-bg:rgba(74,222,128,.08);
+        --danger:#f87171;
+        --danger-bg:rgba(248,113,113,.08);
+        --shadow: 0 1px 0 rgba(0,0,0,.4), 0 10px 26px -14px rgba(0,0,0,.75);
+        --font-display: "Playfair Display", Georgia, serif;
+        --font-body: "Inter", system-ui, -apple-system, sans-serif;
         color-scheme: dark;
     }
+}
+:root[data-theme="night"]{
+    --paper:#0D0D0F;
+    --paper-raised:#15151A;
+    --paper-sunken:#0D0D0F;
+    --ink:#F0EDE8;
+    --ink-soft:#B8B4BE;
+    --ink-faint:#7A7680;
+    --rule:#2A2A35;
+    --rule-strong:#7A7680;
+    --accent:#A78BFA;
+    --accent-ink:#15151A;
+    --accent-soft:rgba(167,139,250,.14);
+    --status-borrador:#7A7680;
+    --status-borrador-bg:rgba(122,118,128,.14);
+    --status-pendiente:#C8A96E;
+    --status-pendiente-bg:rgba(200,169,110,.14);
+    --status-enviado:#86efac;
+    --status-enviado-bg:rgba(74,222,128,.08);
+    --danger:#f87171;
+    --danger-bg:rgba(248,113,113,.08);
+    --shadow: 0 1px 0 rgba(0,0,0,.4), 0 10px 26px -14px rgba(0,0,0,.75);
+    --font-display: "Playfair Display", Georgia, serif;
+    --font-body: "Inter", system-ui, -apple-system, sans-serif;
+    color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 
 body {
     margin: 0;
-    font-family: "Work Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: var(--font-body);
     background: var(--paper);
     color: var(--ink);
     font-size: 15px;
 }
 
 a { color: var(--accent); }
-h1, h2, h3 { font-family: "Fraunces", Georgia, serif; margin: 0; text-wrap: balance; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 .mono { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace; }
 
-/* ---------- Topbar ---------- */
+/* ---------- Selector de tema (botón sol/luna) ---------- */
+.theme-toggle {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+    transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+/* Variante flotante: páginas sin topbar (login). */
+.theme-toggle-floating {
+    position: fixed; right: 18px; bottom: 18px; z-index: 100;
+    width: 40px; height: 40px;
+    background: var(--paper-raised); color: var(--ink-soft);
+    border: 1px solid var(--rule-strong); box-shadow: var(--shadow);
+}
+.theme-toggle-floating:hover { color: var(--accent); border-color: var(--accent); }
+/* Variante dentro del topbar de admin, junto al usuario. */
+.theme-toggle-inline {
+    background: transparent; color: var(--ink-soft);
+    border: 1px solid var(--rule-strong);
+}
+.theme-toggle-inline:hover { color: var(--accent); border-color: var(--accent); background: var(--paper-sunken); }
+.theme-toggle .icon-luna { display: none; }
+:root[data-theme="night"] .theme-toggle .icon-sol { display: none; }
+:root[data-theme="night"] .theme-toggle .icon-luna { display: block; }
+@media (prefers-color-scheme: dark){
+    :root:not([data-theme="day"]) .theme-toggle .icon-sol { display: none; }
+    :root:not([data-theme="day"]) .theme-toggle .icon-luna { display: block; }
+}
+
+/* ---------- Topbar (patrón Movies: barra sutil, el resaltado de "dónde
+   estoy" es solo un cambio de color, nunca una caja/fondo) ---------- */
 .topbar {
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--paper-raised);
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--rule);
     padding: 14px 24px;
     display: flex;
     justify-content: space-between;
@@ -72,21 +135,95 @@ h1, h2, h3 { font-family: "Fraunces", Georgia, serif; margin: 0; text-wrap: bala
     flex-wrap: wrap;
     gap: 10px;
 }
-.topbar .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--accent-ink); }
+.topbar .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .topbar .brand .mark {
-    width: 30px; height: 30px; border-radius: 8px; background: var(--accent-ink); color: var(--accent);
-    display: flex; align-items: center; justify-content: center; font-family: "Fraunces"; font-weight: 700; font-size: 15px;
-    flex-shrink: 0;
+    height: 30px; padding: 0 9px; border-radius: 8px; background: var(--accent); color: var(--accent-ink);
+    display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700;
+    font-size: 12.5px; letter-spacing: 0.5px; flex-shrink: 0;
 }
-.topbar .brand strong { font-family: "Fraunces"; font-size: 17px; font-weight: 600; }
-.topbar .who { display: flex; align-items: center; gap: 14px; font-size: 13.5px; }
-.topnav { display: flex; align-items: center; gap: 14px; }
-.topnav a { color: var(--accent-ink); text-decoration: none; opacity: .85; font-size: 12.5px; font-family: "Work Sans"; font-weight: 500; }
-.topnav a:hover { opacity: 1; text-decoration: underline; }
+.topbar .brand strong { font-family: var(--font-display); font-size: 17px; font-weight: 600; color: var(--ink); }
+.topbar .who { display: flex; align-items: center; gap: 18px; font-size: 13px; }
+.topnav, .navlinks { display: flex; align-items: center; gap: 18px; }
+.topnav a, .navlinks a, .topnav-link {
+    color: var(--ink-faint); text-decoration: none; font-size: 13px; font-family: var(--font-body); font-weight: 500;
+    transition: color .15s ease;
+}
+.topnav a:hover, .navlinks a:hover, .topnav-link:hover { color: var(--ink); text-decoration: none; }
+.navlinks a.activo { color: var(--accent); font-weight: 700; }
 .topbar form { margin: 0; }
 .topbar button {
-    background: transparent; border: 1px solid rgba(247,251,249,0.55); color: var(--accent-ink);
-    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-family: "Work Sans"; font-size: 12.5px;
+    background: transparent; border: 1px solid var(--rule-strong); color: var(--ink-soft);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer; font-family: var(--font-body); font-size: 12.5px;
+    transition: color .15s ease, border-color .15s ease;
+}
+.topbar button:hover { color: var(--danger); border-color: var(--danger); }
+
+/* Agrupa tema/usuario/salir, separados del resto por una línea vertical. */
+.user-cluster {
+    display: flex; align-items: center; gap: 14px;
+    border-left: 1px solid var(--rule); padding-left: 16px;
+}
+.user-cluster .user-name { font-size: 13px; color: var(--ink-faint); }
+
+/* ---------- Dropdowns del topbar (Admin, selector de familia) ---------- */
+.dropdown { position: relative; }
+.dropdown-toggle {
+    background: transparent; border: none; color: var(--ink-faint);
+    font-family: var(--font-body); font-weight: 500; font-size: 13px; cursor: pointer; padding: 0;
+    transition: color .15s ease;
+}
+.dropdown-toggle:hover { color: var(--ink); }
+.dropdown-toggle.activo { color: var(--accent); }
+.dropdown-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 10px); z-index: 50;
+    min-width: 170px; padding: 6px; background: var(--paper-raised); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow);
+    flex-direction: column; gap: 2px;
+}
+.dropdown.abierto .dropdown-menu { display: flex; }
+.dropdown-menu a {
+    display: block; padding: 7px 10px; border-radius: 6px; color: var(--ink);
+    text-decoration: none; font-size: 13px; opacity: 1;
+}
+.dropdown-menu a:hover { background: var(--paper-sunken); text-decoration: none; }
+.dropdown-menu a.activo { color: var(--accent); font-weight: 600; }
+.dropdown-divider { height: 1px; background: var(--rule); margin: 4px 2px; }
+
+.familia-pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--font-body);
+    font-weight: 500; color: var(--accent); background: transparent;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; padding: 5px 12px;
+}
+.familia-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+button.familia-pill { cursor: pointer; transition: border-color .15s ease; }
+button.familia-pill:hover, .dropdown.abierto > button.familia-pill { border-color: var(--accent); }
+
+/* ---------- Hamburguesa + colapso del topbar en mobile: ".who" trae
+   nav de familia + Admin + selector de familia + usuario, todo en una
+   sola fila sin wrap propio — en una pantalla de celular eso desborda.
+   Se oculta detrás de un botón y se abre como panel vertical. ---------- */
+.hamburguesa {
+    display: none; background: transparent; border: 1px solid var(--rule-strong); border-radius: 7px;
+    color: var(--ink-soft); font-size: 17px; line-height: 1; padding: 5px 11px; cursor: pointer;
+}
+@media (max-width: 680px) {
+    .hamburguesa { display: inline-flex; }
+    .topbar .who {
+        display: none; width: 100%; order: 3; flex-direction: column; align-items: stretch; gap: 2px;
+    }
+    .topbar.menu-abierto .who { display: flex; }
+    .navlinks, .topnav { flex-direction: column; align-items: stretch; gap: 0; }
+    .navlinks a, .topnav a, .topnav-link { padding: 10px 2px; border-bottom: 1px solid var(--rule); }
+    .dropdown-menu {
+        display: none; position: static; box-shadow: none; border: none; padding: 0 0 0 14px; min-width: 0;
+    }
+    .dropdown.abierto .dropdown-menu { display: flex; }
+    .dropdown-toggle { width: 100%; text-align: left; padding: 10px 2px; border-bottom: 1px solid var(--rule); }
+    .familia-pill { margin: 8px 0; }
+    .user-cluster {
+        border-left: none; padding-left: 0; border-top: 1px solid var(--rule); padding-top: 10px; margin-top: 4px;
+        flex-wrap: wrap;
+    }
 }
 
 .contenido { max-width: 1240px; margin: 0 auto; padding: 28px 20px 60px; }
@@ -110,8 +247,26 @@ dialog {
     overflow-y: auto;
 }
 dialog::backdrop { background: rgba(20, 16, 10, 0.5); }
-dialog h2 { margin-bottom: 4px; }
+dialog h2 { margin-bottom: 4px; padding-right: 30px; cursor: move; user-select: none; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+dialog.modal-ancho { width: min(760px, 94vw); }
+.modal-cerrar-x {
+    position: absolute; top: 14px; right: 14px; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: none; border-radius: 6px; cursor: pointer;
+    font-size: 20px; line-height: 1; color: var(--ink-faint); padding: 0;
+}
+.modal-cerrar-x:hover { color: var(--ink); background: var(--paper-sunken); }
+
+/* ---------- Tabs (Hechos de familia: Validados/Pendientes/Descartados) ---------- */
+.tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.tab-btn {
+    background: transparent; border: 1px solid var(--rule-strong); color: var(--ink-soft);
+    padding: 8px 16px; border-radius: 999px; cursor: pointer; font-family: var(--font-body);
+    font-weight: 600; font-size: 0.82rem; transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.tab-btn:hover { color: var(--ink); border-color: var(--ink-faint); }
+.tab-btn.activo { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 /* ---------- Login / landing ---------- */
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -128,6 +283,16 @@ dialog h2 { margin-bottom: 4px; }
 .login-copy h1 { font-size: clamp(24px, 4vw, 30px); }
 .login-copy > p { color: var(--ink-soft); font-size: 14.5px; max-width: 36ch; }
 .login-form { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+.password-field { position: relative; }
+.password-field input { padding-right: 38px; }
+.password-toggle {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0; border: none; background: transparent;
+    color: var(--ink-faint); cursor: pointer; border-radius: 6px;
+}
+.password-toggle:hover { color: var(--ink-soft); }
+.password-toggle.activo { color: var(--accent); }
 
 /* ---------- Panels / cards ---------- */
 .card {
@@ -149,11 +314,11 @@ input[type=datetime-local], textarea, select {
     border: 1px solid var(--rule-strong);
     border-radius: 7px;
     font-size: 0.95rem;
-    font-family: "Work Sans", inherit;
+    font-family: var(--font-body);
     background: var(--paper);
     color: var(--ink);
 }
-textarea { resize: vertical; font-family: "Fraunces"; font-size: 1rem; }
+textarea { resize: vertical; font-family: var(--font-display); font-size: 1rem; }
 .campo-apagado { opacity: .45; background: var(--paper-sunken); cursor: not-allowed; }
 
 .btn {
@@ -164,7 +329,7 @@ textarea { resize: vertical; font-family: "Fraunces"; font-size: 1rem; }
     padding: 9px 18px;
     border-radius: 7px;
     cursor: pointer;
-    font-family: "Work Sans";
+    font-family: var(--font-body);
     font-weight: 600;
     font-size: 0.85rem;
     text-decoration: none;
@@ -193,7 +358,7 @@ summary {
     border-radius: 7px;
     cursor: pointer;
     font-size: 0.78rem;
-    font-family: "Work Sans";
+    font-family: var(--font-body);
     font-weight: 600;
     list-style: none;
 }
@@ -224,7 +389,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
     display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
     padding: 14px 16px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent);
 }
-.patient-link .who { font-family: "Fraunces"; font-weight: 600; font-size: 16px; }
+.patient-link .who { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
 .patient-link .sub { font-size: 12.5px; color: var(--ink-soft); font-family: "IBM Plex Mono"; }
 
 .settings-strip {
@@ -273,7 +438,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
     display: flex; align-items: center; justify-content: center; font-family: "IBM Plex Mono"; font-size: 13px; color: var(--ink-soft);
 }
 .conv-main { flex: 1; min-width: 160px; }
-.conv-main .name { font-family: "Fraunces"; font-weight: 600; font-size: 15.5px; }
+.conv-main .name { font-family: var(--font-display); font-weight: 600; font-size: 15.5px; }
 .conv-main .meta { font-size: 12px; color: var(--ink-faint); font-family: "IBM Plex Mono"; margin-top: 2px; }
 .conv-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .conv-actions details { min-width: 0; }
@@ -309,7 +474,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 .diagrama-nodo {
     width: 100%; height: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
     background: var(--paper-sunken); border: 1.5px solid var(--rule-strong); cursor: move;
-    font-family: "Work Sans"; overflow: hidden; transition: box-shadow .15s ease; position: relative;
+    font-family: var(--font-body); overflow: hidden; transition: box-shadow .15s ease; position: relative;
     user-select: none;
 }
 .diagrama-nodo:hover, .diagrama-nodo:focus { box-shadow: var(--shadow); outline: none; }
@@ -321,12 +486,11 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 .diagrama-nodo.entrada .diagrama-nodo-id { color: var(--accent); }
 .diagrama-nodo.huerfano .diagrama-nodo-id { color: var(--danger); }
 .diagrama-nodo-texto {
-    font-size: 12.5px; color: var(--ink); line-height: 1.3; cursor: text;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font-size: 12.5px; color: var(--ink); line-height: 1.3; cursor: text; overflow: hidden;
 }
 .diagrama-nodo-texto-edit {
     width: 100%; height: calc(100% - 20px); resize: none; border: none; outline: none;
-    background: var(--paper-raised); color: var(--ink); font-family: "Work Sans"; font-size: 12.5px;
+    background: var(--paper-raised); color: var(--ink); font-family: var(--font-body); font-size: 12.5px;
     padding: 2px; border-radius: 4px;
 }
 .diagrama-resize {
@@ -341,7 +505,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 }
 .diagrama-nodo:hover .diagrama-conector { opacity: 1; }
 .diagrama-menu-boton {
-    position: absolute; right: -7px; top: -7px; width: 18px; height: 18px; border-radius: 50%;
+    position: absolute; right: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%;
     background: var(--paper-raised); color: var(--ink-soft); border: 1.5px solid var(--rule-strong);
     font-size: 12px; line-height: 15px; text-align: center; cursor: pointer;
     opacity: 0; transition: opacity .15s ease; user-select: none;
@@ -354,7 +518,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 }
 .diagrama-menu-popover button {
     display: block; width: 100%; text-align: left; padding: 7px 10px; border: none; border-radius: 5px;
-    background: none; color: var(--ink); font-family: "Work Sans"; font-size: 13px; cursor: pointer;
+    background: none; color: var(--ink); font-family: var(--font-body); font-size: 13px; cursor: pointer;
 }
 .diagrama-menu-popover button:hover { background: var(--paper-sunken); }
 .diagrama-menu-popover button.danger { color: var(--danger); }
@@ -381,7 +545,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 .slug .idnum { color: var(--ink-faint); font-weight: 500; }
 .slug .tags { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 
-.dialogue { padding: 16px; font-family: "Fraunces"; font-size: 16px; line-height: 1.45; }
+.dialogue { padding: 16px; font-family: var(--font-display); font-size: 16px; line-height: 1.45; }
 
 .branches { padding: 0 16px 14px; }
 .branch { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px dashed var(--rule); font-size: 13px; flex-wrap: wrap; }
@@ -425,14 +589,14 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 
 /* ---------- Bandeja (inbox) ---------- */
 .inbox-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-.inbox-header .count { font-family: "Fraunces"; font-size: 19px; font-weight: 600; }
+.inbox-header .count { font-family: var(--font-display); font-size: 19px; font-weight: 600; }
 .inbox-card { background: var(--paper-raised); border: 1px solid var(--rule); border-radius: 10px; box-shadow: var(--shadow); padding: 14px 16px 16px; margin-bottom: 16px; }
 .inbox-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .avatar {
     width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent);
-    display: flex; align-items: center; justify-content: center; font-family: "Fraunces"; font-weight: 700; font-size: 13px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 13px; flex-shrink: 0;
 }
-.inbox-top .name { font-family: "Fraunces"; font-weight: 600; font-size: 14.5px; }
+.inbox-top .name { font-family: var(--font-display); font-weight: 600; font-size: 14.5px; }
 .inbox-top .when { margin-left: auto; font-family: "IBM Plex Mono"; font-size: 11.5px; color: var(--ink-faint); }
 .inbox-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 

@@ -1,0 +1,68 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Usuarios — {{ familia.nombre }}{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia.id }}">&larr; volver</a></p>
+<div class="card-header-row">
+    <h1>Usuarios de {{ familia.nombre }}</h1>
+    <button class="btn chico" type="button" onclick="document.getElementById('modal-nuevo-usuario').showModal()">+ Agregar</button>
+</div>
+
+<div class="card">
+    <table>
+        <tr><th>Nombre</th><th>Email</th><th>Rol</th><th></th></tr>
+        {% for m in memberships %}
+        <tr>
+            <td>{{ m.usuario.nombre }}</td>
+            <td>{{ m.usuario.email }}</td>
+            <td>
+                <form method="post" action="/admin/familias/{{ familia.id }}/usuarios/{{ m.id }}/rol" style="display:inline-flex; gap:6px; align-items:center;">
+                    <select name="rol" onchange="this.form.requestSubmit()">
+                        {% for r in roles %}
+                        <option value="{{ r.value }}" {% if r == m.rol %}selected{% endif %}>
+                            {{ "Admin" if r.value == "admin_familia" else "Familiar" }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </td>
+            <td>
+                <form method="post" action="/admin/familias/{{ familia.id }}/usuarios/{{ m.id }}/borrar"
+                      data-confirm="¿Sacar a {{ m.usuario.nombre }} de esta familia? No borra su cuenta, solo pierde acceso acá.">
+                    <button class="btn chico danger" type="submit">Quitar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        {% if mostrar_superadmin %}
+        <tr>
+            <td>{{ user.nombre }}</td>
+            <td>{{ user.email }}</td>
+            <td><span class="stamp enviado">superadmin — acceso total</span></td>
+            <td></td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<dialog id="modal-nuevo-usuario">
+    <h2>Agregar a la familia</h2>
+    <form method="post" action="/admin/familias/{{ familia.id }}/usuarios">
+        <label>Email</label>
+        <input type="email" name="email" required>
+        <p class="hint">Si el email ya es de alguien en el sistema, se lo agrega a esta familia sin crear una cuenta nueva.</p>
+        <label>Nombre (solo si es una persona nueva)</label>
+        <input type="text" name="nombre">
+        <label>Contraseña (solo si es una persona nueva)</label>
+        <input type="password" name="password">
+        <label>Rol</label>
+        <select name="rol">
+            <option value="admin_familia">Admin</option>
+            <option value="familiar">Familiar</option>
+        </select>
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-nuevo-usuario').close()">Cancelar</button>
+            <button class="btn" type="submit">Agregar</button>
+        </div>
+    </form>
+</dialog>
+{% endblock %}

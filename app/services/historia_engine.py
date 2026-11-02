@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.enums import EstadoHechoFamiliar, EstadoHistoriaSesion, OrigenMensajeHistoria
+from app.models.enums import EstadoHechoFamiliar, EstadoHistoriaSesion, ModoEnvio, OrigenMensajeHistoria
 from app.models.hecho_familiar import HechoFamiliar
 from app.models.historia import Historia
 from app.models.historia_mensaje import HistoriaMensaje
@@ -23,11 +23,20 @@ MENSAJE_FALLBACK_INICIO = "Che, me acordé de algo lindo... ¿tenés un ratito p
 MENSAJE_FALLBACK_CIERRE = "Bueno, te dejo por ahora — ¡seguimos charlando otro día! ❤️"
 
 
+def _minutos_transcurridos(sesion: HistoriaSesion, ahora: datetime) -> float:
+    inicio = sesion.iniciada_en
+    if inicio.tzinfo is None:
+        inicio = inicio.replace(tzinfo=timezone.utc)
+    return max(0.0, (ahora - inicio).total_seconds() / 60)
+
+
 def _armar_prompt(
     historia: Historia,
     personaje: Personaje,
     mensajes: list[HistoriaMensaje],
     hechos_familiares: list[str],
+    minutos_transcurridos: float = 0.0,
+    forzar_cierre: bool = False,
 ) -> str:
     ficha_personaje = "\n".join(
         filter(
@@ -36,7 +45,6 @@ def _armar_prompt(
                 f"Relación con el paciente: {personaje.relacion_con_paciente}"
                 if personaje.relacion_con_paciente
                 else None,
-                f"Descripción: {personaje.descripcion}" if personaje.descripcion else None,
                 f"Tono de escritura: {personaje.tono_escritura}" if personaje.tono_escritura else None,
             ],
         )
@@ -70,6 +78,20 @@ def _armar_prompt(
 Otros datos ya sabidos de la familia (no los menciones si no vienen al caso, pero si el paciente busca uno de estos datos puntuales y no lo encuentra, sí usalo — ver regla de abajo):
 {lista}"""
 
+    if forzar_cierre:
+        regla_cierre = (
+            "- Este mensaje tiene que ser el ÚLTIMO de la charla: ya se pasó el tiempo pensado para esta "
+            "conversación. Cerrala ahora mismo, con cariño, en tu propio tono — si el paciente ya dijo algo como "
+            "que se tiene que ir o despedirse, respondé a eso; si no, encontrá vos una despedida cálida y natural, "
+            "sin inventar excusas de vida (trabajo, horarios, viajes) que no están en tu ficha."
+        )
+    else:
+        regla_cierre = (
+            "- Si ya se charló lo esencial, o si se está acercando el tiempo pensado para esta charla, cerrala "
+            "con cariño vos mismo/a, en tu propio tono, sin inventar excusas de vida (trabajo, horarios, viajes) "
+            "que no están en tu ficha."
+        )
+
     return f"""Estás actuando como {personaje.nombre} en un ejercicio de estimulación cognitiva por chat con un paciente con dificultades de memoria. Tenés que sonar como una persona real que lo/la quiere, no como un asistente.
 
 Ficha de {personaje.nombre} (no digas nada que la contradiga — por ejemplo no inventes un trabajo, una rutina o un lugar donde vive que no está acá):
@@ -82,8 +104,8 @@ Historia sobre la que están hablando:
 Reglas:
 - Solo podés usar hechos de "lo que se sabe" arriba, de "otros datos ya sabidos de la familia", o lo que el paciente ya haya dicho en esta charla. Si te falta un dato que no está en ningún lado de eso, PREGUNTASELO al paciente en vez de inventarlo — que sea él/ella quien complete el recuerdo.
 - Si el paciente muestra que no se acuerda de un dato puntual (un nombre, un lugar, etc.) y ese dato SÍ está en "lo que se sabe" o en "otros datos ya sabidos de la familia", ayudalo/a vos con cariño en vez de dejarlo sin resolver o preguntarle de nuevo — para eso están esos datos.
-- Esta charla debería sentirse como una conversación de a lo sumo {historia.duracion_maxima_minutos} minutos entre personas reales — no la estires de más ni la llenes de relleno.
-- Si ya se charló lo esencial, o si esto ya lleva varios intercambios, cerrala con cariño vos mismo/a, en tu propio tono, sin inventar excusas de vida (trabajo, horarios, viajes) que no están en tu ficha.
+- Ya pasaron {minutos_transcurridos:.0f} de los {historia.duracion_maxima_minutos} minutos pensados para esta charla — guiate por ese tiempo real, no por la cantidad de mensajes, para decidir el ritmo.
+{regla_cierre}
 - Un solo mensaje corto por turno, como en un chat de verdad.
 - El paciente es una persona mayor con dificultades cognitivas: usá un lenguaje cálido, claro y respetuoso, sin jerga moderna ni muletillas juveniles (nada de "ey", "posta", "chabón", "capo" y similares) — hablale como realmente le hablaría alguien de tu relación con él/ella, no como si le escribieras a un amigo de tu misma edad.
 
@@ -109,22 +131,33 @@ def generar_siguiente_mensaje(
     personaje: Personaje,
     mensajes: list[HistoriaMensaje],
     hechos_familiares: list[str] | None = None,
+    minutos_transcurridos: float = 0.0,
+    forzar_cierre: bool = False,
 ) -> tuple[str, bool]:
     """Adaptador aislado: genera el próximo mensaje del personaje dentro de
     una sesión de Historia, grounded en la historia + lo ya conversado (+
     opcionalmente hechos familiares ya validados por el admin). Devuelve
     (texto, debe_cerrar). Ante cualquier falla (sin API key, error de red,
     parseo) devuelve un mensaje de emergencia neutro en vez de dejar al
-    paciente sin respuesta."""
-    prompt = _armar_prompt(historia, personaje, mensajes, hechos_familiares or [])
+    paciente sin respuesta.
+
+    `forzar_cierre` es el backstop real por tiempo: si ya se pasó la
+    duración máxima configurada, cerramos sí o sí (no queda a criterio del
+    modelo, que no tiene noción confiable de minutos reales) — pero nunca
+    en seco: igual le pedimos a la IA un último mensaje de despedida en su
+    propio tono, grounded en la charla, en vez de un corte mudo."""
+    prompt = _armar_prompt(
+        historia, personaje, mensajes, hechos_familiares or [], minutos_transcurridos, forzar_cierre
+    )
     raw = generar_texto(prompt, max_tokens=400)
     if raw is None:
-        return (MENSAJE_FALLBACK_CIERRE if mensajes else MENSAJE_FALLBACK_INICIO), bool(mensajes)
+        return (MENSAJE_FALLBACK_CIERRE if mensajes else MENSAJE_FALLBACK_INICIO), (forzar_cierre or bool(mensajes))
     try:
-        return _parsear(raw)
+        texto, cerrar = _parsear(raw)
+        return texto, (cerrar or forzar_cierre)
     except Exception:
         logger.exception("Falló el parseo de la respuesta de historia; se usa fallback.")
-        return (MENSAJE_FALLBACK_CIERRE if mensajes else MENSAJE_FALLBACK_INICIO), bool(mensajes)
+        return (MENSAJE_FALLBACK_CIERRE if mensajes else MENSAJE_FALLBACK_INICIO), (forzar_cierre or bool(mensajes))
 
 
 def _hechos_validados(db: Session, familia_id: int) -> list[str]:
@@ -157,18 +190,61 @@ def _cerrar_si_hace_falta(db: Session, sesion: HistoriaSesion, cerrar: bool, aho
         )
 
 
+def procesar_historias_vencidas(
+    db: Session, paciente_id: int, ahora: datetime | None = None
+) -> list[Historia]:
+    """Equivalente de motor.procesar_guiones_vencidos para historias: busca
+    historias en modo automático con fecha ya vencida (acotadas a la
+    familia del paciente) y las propone solas. A diferencia de un guion de
+    entrada, una Historia es contenido reusable, no algo que pase a
+    "enviado" — por eso, una vez disparada, se limpia fecha_programada en
+    vez de cambiar de estado: queda consumida hasta que alguien programe
+    una fecha nueva."""
+    ahora = ahora or datetime.now(timezone.utc)
+    paciente = db.get(Paciente, paciente_id)
+    vencidas = list(
+        db.scalars(
+            select(Historia)
+            .join(Personaje, Historia.personaje_id == Personaje.id)
+            .where(
+                Historia.modo_envio == ModoEnvio.automatico,
+                Historia.fecha_programada.is_not(None),
+                Historia.fecha_programada <= ahora,
+                Personaje.familia_id == paciente.familia_id,
+            )
+        ).all()
+    )
+
+    procesadas = []
+    for historia in vencidas:
+        historia.fecha_programada = None
+        iniciar_sesion(db, historia, paciente_id, ahora)
+        procesadas.append(historia)
+
+    return procesadas
+
+
 def iniciar_sesion(
-    db: Session, historia: Historia, paciente_id: int, ahora: datetime | None = None
+    db: Session,
+    historia: Historia,
+    paciente_id: int,
+    ahora: datetime | None = None,
+    texto_inicial: str | None = None,
 ) -> HistoriaSesion:
-    """El admin le propone la historia al paciente ahora: arranca una sesión
-    nueva y genera el primer mensaje del personaje."""
+    """Arranca la sesión de verdad: la crea y le llega al paciente ya
+    mismo. `texto_inicial`, si viene, es un mensaje ya generado y aprobado
+    de antes (ver `aprobar_propuesta`) — se usa tal cual, sin generar uno
+    nuevo, para que lo que se aprobó sea exactamente lo que se manda."""
     ahora = ahora or datetime.now(timezone.utc)
     sesion = HistoriaSesion(historia_id=historia.id, paciente_id=paciente_id)
     db.add(sesion)
     db.flush()
 
-    hechos = _hechos_validados(db, historia.personaje.familia_id)
-    texto, cerrar = generar_siguiente_mensaje(historia, historia.personaje, [], hechos)
+    if texto_inicial is not None:
+        texto, cerrar = texto_inicial, False
+    else:
+        hechos = _hechos_validados(db, historia.personaje.familia_id)
+        texto, cerrar = generar_siguiente_mensaje(historia, historia.personaje, [], hechos)
     db.add(HistoriaMensaje(sesion_id=sesion.id, origen=OrigenMensajeHistoria.personaje, texto=texto))
     _cerrar_si_hace_falta(db, sesion, cerrar, ahora)
     db.flush()
@@ -181,6 +257,33 @@ def iniciar_sesion(
     return sesion
 
 
+def proponer(db: Session, historia: Historia, ahora: datetime | None = None) -> None:
+    """Modo manual: genera el primer mensaje y lo deja esperando en la
+    Bandeja — no crea ninguna sesión todavía, nada le llega al paciente
+    hasta que se apruebe (igual que un guion de entrada manual)."""
+    ahora = ahora or datetime.now(timezone.utc)
+    hechos = _hechos_validados(db, historia.personaje.familia_id)
+    texto, _cerrar = generar_siguiente_mensaje(historia, historia.personaje, [], hechos)
+    historia.mensaje_propuesto = texto
+    historia.propuesta_en = ahora
+
+
+def aprobar_propuesta(
+    db: Session, historia: Historia, paciente_id: int, mensaje: str, ahora: datetime | None = None
+) -> HistoriaSesion:
+    """El admin aprueba (y puede haber editado) la propuesta: recién ahora
+    se crea la sesión de verdad y le llega al paciente."""
+    historia.mensaje_propuesto = None
+    historia.propuesta_en = None
+    return iniciar_sesion(db, historia, paciente_id, ahora, texto_inicial=mensaje)
+
+
+def desactivar_propuesta(historia: Historia) -> None:
+    """Sacar la propuesta de la Bandeja sin aprobarla — no se manda nada."""
+    historia.mensaje_propuesto = None
+    historia.propuesta_en = None
+
+
 def registrar_respuesta(db: Session, sesion: HistoriaSesion, texto_respuesta: str, ahora: datetime | None = None) -> None:
     """El paciente contestó dentro de una sesión de historia activa: guarda
     su mensaje y genera la siguiente intervención del personaje."""
@@ -191,7 +294,11 @@ def registrar_respuesta(db: Session, sesion: HistoriaSesion, texto_respuesta: st
 
     historia = sesion.historia
     hechos = _hechos_validados(db, historia.personaje.familia_id)
-    texto, cerrar = generar_siguiente_mensaje(historia, historia.personaje, list(sesion.mensajes), hechos)
+    minutos_transcurridos = _minutos_transcurridos(sesion, ahora)
+    forzar_cierre = minutos_transcurridos >= historia.duracion_maxima_minutos
+    texto, cerrar = generar_siguiente_mensaje(
+        historia, historia.personaje, list(sesion.mensajes), hechos, minutos_transcurridos, forzar_cierre
+    )
     db.add(HistoriaMensaje(sesion_id=sesion.id, origen=OrigenMensajeHistoria.personaje, texto=texto))
     _cerrar_si_hace_falta(db, sesion, cerrar, ahora)
     db.flush()

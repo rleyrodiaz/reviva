@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -15,6 +15,11 @@ class Usuario(Base):
     # familia (ver FamiliaMembership), que es lo que controla el acceso a
     # cada /admin/familias/{id}/... en particular.
     es_superadmin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Última familia que visitó, para saber a cuál mandarlo al loguearse
+    # cuando pertenece a más de una. SET NULL si esa familia se borra.
+    ultima_familia_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("familias.id", ondelete="SET NULL"), nullable=True
+    )
 
     memberships: Mapped[list["FamiliaMembership"]] = relationship(
         "FamiliaMembership", back_populates="usuario", cascade="all, delete-orphan"

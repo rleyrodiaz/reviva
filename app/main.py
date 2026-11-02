@@ -1,12 +1,17 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from app.exceptions import AccessDenied, NeedsLogin
 from app.routers import admin, auth, chat, push
+from app.services.assets import static_version
 from app.services.scheduler import start_scheduler, stop_scheduler
+
+templates = Jinja2Templates(directory="app/templates")
+templates.env.globals["static_version"] = static_version
 
 
 @asynccontextmanager
@@ -53,4 +58,9 @@ async def needs_login_handler(request: Request, exc: NeedsLogin):
 
 @app.exception_handler(AccessDenied)
 async def access_denied_handler(request: Request, exc: AccessDenied):
-    return PlainTextResponse("Acceso denegado.", status_code=403)
+    volver = request.headers.get("referer") or "/admin/familias"
+    return templates.TemplateResponse(
+        "error.html",
+        {"request": request, "mensaje": exc.mensaje, "volver": volver},
+        status_code=403,
+    )

@@ -13,7 +13,6 @@ class Personaje(Base):
     )
     nombre: Mapped[str] = mapped_column(String(150), nullable=False)
     foto: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    descripcion: Mapped[str | None] = mapped_column(Text, nullable=True)
     relacion_con_paciente: Mapped[str | None] = mapped_column(String(200), nullable=True)
     tono_escritura: Mapped[str | None] = mapped_column(Text, nullable=True)
 

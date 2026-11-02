@@ -36,16 +36,7 @@
 </div>
 
 <div class="chat-input-bar" id="chat-input-bar">
-    {% if esperando_tipo == "opciones" %}
-    <div class="quick-replies">
-        {% for o in esperando_opciones %}
-        <form method="post" action="/chat/{{ paciente.id }}/{{ personaje.id }}/responder" style="display:inline;">
-            <input type="hidden" name="opcion_id" value="{{ o.id }}">
-            <button class="quick-reply-btn" type="submit">{{ o.texto_opcion }}</button>
-        </form>
-        {% endfor %}
-    </div>
-    {% elif esperando_tipo %}
+    {% if esperando_tipo %}
     <form method="post" action="/chat/{{ paciente.id }}/{{ personaje.id }}/responder" class="text-input-form">
         <input type="text" name="texto" placeholder="Escribí un mensaje..." autofocus required autocomplete="off">
         <button type="submit" class="send-btn">&#10148;</button>

@@ -1,0 +1,41 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Settings global{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias">&larr; volver</a></p>
+<h2>Settings global</h2>
+<p class="hint">Esto afecta a toda la app, todas las familias a la vez — el reset acotado a una familia puntual vive dentro de cada familia (Admin → Settings).</p>
+
+{% if msg == 'init_ok' %}
+<div class="card" style="border-color: var(--status-enviado); color: var(--status-enviado);">Base de datos inicializada correctamente.</div>
+{% elif msg == 'confirm_error' %}
+<div class="card" style="border-color: var(--danger); color: var(--danger);">Texto de confirmación incorrecto. No se realizó ninguna acción.</div>
+{% endif %}
+
+<div class="card">
+    <h3>Inicializar base de datos</h3>
+    <p class="hint">Crea las tablas que no existan todavía. Operación segura — no toca datos existentes.</p>
+    <form method="post" action="/admin/settings/init">
+        <button class="btn secundario" type="submit">Inicializar DB</button>
+    </form>
+</div>
+
+<div class="card" style="border-color: var(--danger);">
+    <h3 style="color: var(--danger);">Resetear todo</h3>
+    <p class="hint">
+        Elimina <strong>todos los datos de toda la app</strong> — familias ({{ stats.get('familias', 0) }}), personajes,
+        conversaciones, guiones, pacientes y usuarios ({{ stats.get('usuarios', 0) }}) — y recrea el esquema vacío.
+    </p>
+    <p class="hint">Tu cuenta sigue existiendo (mismo email y contraseña) como único superadmin; el resto de los usuarios pierde el acceso.</p>
+    <form method="post" action="/admin/settings/reset" id="form-reset-total">
+        <label for="confirm-input">Escribí <code>RESET</code> para confirmar</label>
+        <input type="text" id="confirm-input" name="confirm" autocomplete="off" placeholder="RESET" style="max-width:220px;">
+        <button id="btn-reset-total" class="btn danger" type="submit" disabled>Resetear todo</button>
+    </form>
+</div>
+
+<script>
+document.getElementById('confirm-input').addEventListener('input', function () {
+    document.getElementById('btn-reset-total').disabled = this.value !== 'RESET';
+});
+</script>
+{% endblock %}

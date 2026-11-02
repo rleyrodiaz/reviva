@@ -191,14 +191,3 @@ html, body {
     font-size: 1rem;
 }
 
-.quick-replies { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.quick-reply-btn {
-    background: var(--bubble-in-bg);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 9px 16px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 0.9rem;
-}
-.quick-reply-btn:hover { background: var(--accent); color: white; }

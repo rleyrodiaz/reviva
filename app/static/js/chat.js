@@ -76,39 +76,15 @@
         box.scrollTop = box.scrollHeight;
     }
 
-    function renderizarInputBar(tipo, opciones) {
+    function renderizarInputBar(tipo) {
         if (!tipo) {
             inputBar.innerHTML = "";
             return;
         }
-        if (tipo === "opciones" && opciones && opciones.length) {
-            var cont = document.createElement("div");
-            cont.className = "quick-replies";
-            opciones.forEach(function (o) {
-                var form = document.createElement("form");
-                form.method = "post";
-                form.action = baseUrl + "/responder";
-                form.style.display = "inline";
-                var hidden = document.createElement("input");
-                hidden.type = "hidden";
-                hidden.name = "opcion_id";
-                hidden.value = o.id;
-                var btn = document.createElement("button");
-                btn.type = "submit";
-                btn.className = "quick-reply-btn";
-                btn.textContent = o.texto;
-                form.appendChild(hidden);
-                form.appendChild(btn);
-                cont.appendChild(form);
-            });
-            inputBar.innerHTML = "";
-            inputBar.appendChild(cont);
-        } else {
-            inputBar.innerHTML =
-                '<form method="post" action="' + baseUrl + '/responder" class="text-input-form">' +
-                '<input type="text" name="texto" placeholder="Escribí un mensaje..." autofocus required autocomplete="off">' +
-                '<button type="submit" class="send-btn">&#10148;</button></form>';
-        }
+        inputBar.innerHTML =
+            '<form method="post" action="' + baseUrl + '/responder" class="text-input-form">' +
+            '<input type="text" name="texto" placeholder="Escribí un mensaje..." autofocus required autocomplete="off">' +
+            '<button type="submit" class="send-btn">&#10148;</button></form>';
     }
 
     function sincronizarPolling() {
@@ -157,7 +133,7 @@
                 var faltante = Math.max(0, esperarHasta - transcurrido);
                 setTimeout(function () {
                     if (textoRespuesta) crearBurbujaEntrada(textoRespuesta);
-                    renderizarInputBar(data.siguiente_tipo, data.siguiente_opciones);
+                    renderizarInputBar(data.siguiente_tipo);
                 }, faltante);
             })
             .catch(function () {
@@ -172,9 +148,7 @@
         var form = ev.target;
         var datosForm = new FormData(form);
         var texto = (datosForm.get("texto") || "").trim();
-        var opcionId = datosForm.get("opcion_id") || "";
-        if (!texto && !opcionId) return;
-        var textoVisible = texto || (ev.submitter ? ev.submitter.textContent.trim() : "");
-        enviar({ texto: texto, opcion_id: opcionId }, textoVisible);
+        if (!texto) return;
+        enviar({ texto: texto }, texto);
     });
 })();

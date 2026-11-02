@@ -11,7 +11,6 @@ from app.models.historia import Historia
 from app.models.historia_mensaje import HistoriaMensaje
 from app.models.historia_sesion import HistoriaSesion
 from app.models.interaccion import Interaccion
-from app.models.opcion_respuesta import OpcionRespuesta
 from app.models.paciente import Paciente
 from app.models.personaje import Personaje
 from app.services import historia_engine, motor
@@ -157,14 +156,11 @@ def conversacion(
     eventos.sort(key=lambda e: e["ts"])
 
     esperando_tipo = None
-    esperando_opciones = None
     sesion_activa = _sesion_historia_activa(db, personaje_id, paciente_id)
     if sesion_activa and sesion_activa.mensajes and sesion_activa.mensajes[-1].origen == OrigenMensajeHistoria.personaje:
         esperando_tipo = "historia"
     elif interacciones and interacciones[-1].timestamp_respuesta is None:
-        ultimo_guion = interacciones[-1].guion
-        esperando_tipo = ultimo_guion.tipo_respuesta.value
-        esperando_opciones = ultimo_guion.opciones if esperando_tipo == "opciones" else None
+        esperando_tipo = "libre"
 
     return templates.TemplateResponse(
         "chat/conversacion.html",
@@ -174,7 +170,6 @@ def conversacion(
             "personaje": personaje,
             "eventos": eventos,
             "esperando_tipo": esperando_tipo,
-            "esperando_opciones": esperando_opciones,
         },
     )
 
@@ -184,18 +179,17 @@ def responder(
     paciente_id: int,
     personaje_id: int,
     texto: str = Form(""),
-    opcion_id: str = Form(""),
     db: Session = Depends(get_db_dep),
 ):
     """Devuelve JSON (lo consume el chat vía fetch, ver chat.js) con el
     próximo mensaje del personaje — si lo hay — para que el cliente lo
     muestre con una demora creíble en vez de todo de golpe."""
     _get_paciente_or_404(db, paciente_id)
+    if not texto.strip():
+        raise HTTPException(status_code=400, detail="Hace falta un texto.")
 
     sesion_activa = _sesion_historia_activa(db, personaje_id, paciente_id)
     if sesion_activa and sesion_activa.mensajes and sesion_activa.mensajes[-1].origen == OrigenMensajeHistoria.personaje:
-        if not texto.strip():
-            raise HTTPException(status_code=400, detail="Hace falta un texto.")
         historia_engine.registrar_respuesta(db, sesion_activa, texto.strip())
         db.flush()
         db.refresh(sesion_activa)
@@ -205,7 +199,6 @@ def responder(
             "ok": True,
             "respuesta_texto": ultimo.texto,
             "siguiente_tipo": "libre" if sigue_activa else None,
-            "siguiente_opciones": None,
         })
 
     interaccion = db.scalar(
@@ -222,13 +215,7 @@ def responder(
     if interaccion is None:
         raise HTTPException(status_code=400, detail="No hay nada esperando respuesta en este momento.")
 
-    if opcion_id:
-        opcion = db.get(OpcionRespuesta, int(opcion_id))
-        siguiente = motor.registrar_respuesta_opciones(interaccion, opcion)
-    elif texto.strip():
-        siguiente = motor.registrar_respuesta_libre(interaccion, texto.strip())
-    else:
-        raise HTTPException(status_code=400, detail="Hace falta un texto o elegir una opción.")
+    siguiente = motor.registrar_respuesta_libre(db, interaccion, texto.strip())
 
     db.flush()
     # Un guion que no es de entrada siempre es automático: se manda ya, en
@@ -242,7 +229,6 @@ def responder(
             "ok": True,
             "respuesta_texto": interaccion.cierre_generado,
             "siguiente_tipo": None,
-            "siguiente_opciones": None,
         })
 
     db.refresh(siguiente)
@@ -250,7 +236,7 @@ def responder(
         # Caso raro: el destino es un guion de entrada manual — no se manda
         # solo, queda esperando aprobación en la bandeja. Nada para mostrar
         # en el chat todavía.
-        return JSONResponse({"ok": True, "respuesta_texto": None, "siguiente_tipo": None, "siguiente_opciones": None})
+        return JSONResponse({"ok": True, "respuesta_texto": None, "siguiente_tipo": None})
 
     nueva_interaccion = db.scalar(
         select(Interaccion)
@@ -258,13 +244,8 @@ def responder(
         .order_by(Interaccion.id.desc())
     )
     texto_enviado = nueva_interaccion.texto_enviado if nueva_interaccion else siguiente.texto_mensaje
-    tipo = siguiente.tipo_respuesta.value
-    opciones = None
-    if tipo == "opciones":
-        opciones = [{"id": o.id, "texto": o.texto_opcion} for o in siguiente.opciones]
     return JSONResponse({
         "ok": True,
         "respuesta_texto": texto_enviado,
-        "siguiente_tipo": tipo,
-        "siguiente_opciones": opciones,
+        "siguiente_tipo": "libre",
     })

@@ -20,10 +20,6 @@ class Interaccion(Base):
     # el guion, el historial del paciente no debe cambiar retroactivamente.
     texto_enviado: Mapped[str | None] = mapped_column(Text, nullable=True)
     respuesta_texto: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # A lo sumo una de las dos está seteada, según el tipo_respuesta del guion.
-    opcion_elegida_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("opciones_respuesta.id", ondelete="SET NULL"), nullable=True
-    )
     rama_libre_elegida_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("ramas_respuesta_libre.id", ondelete="SET NULL"), nullable=True
     )
@@ -37,5 +33,4 @@ class Interaccion(Base):
 
     guion: Mapped["Guion"] = relationship("Guion")
     paciente: Mapped["Paciente"] = relationship("Paciente", back_populates="interacciones")
-    opcion_elegida: Mapped["OpcionRespuesta | None"] = relationship("OpcionRespuesta")
     rama_libre_elegida: Mapped["RamaRespuestaLibre | None"] = relationship("RamaRespuestaLibre")
