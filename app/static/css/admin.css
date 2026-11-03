@@ -233,6 +233,16 @@ button.familia-pill:hover, .dropdown.abierto > button.familia-pill { border-colo
 .row-2col > .col-narrow { flex: 1 1 320px; }
 .row-2col > .col-wide { flex: 2 1 480px; }
 .card-header-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline-form input[type="text"] { min-width: 0; }
+
+.btn-x {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--rule-strong);
+    background: transparent; color: var(--ink-faint); cursor: pointer; font-size: 17px;
+    line-height: 1; padding: 0;
+}
+.btn-x:hover { color: var(--danger); border-color: var(--danger); }
 
 /* ---------- Modales ---------- */
 dialog {
@@ -267,6 +277,14 @@ dialog.modal-ancho { width: min(760px, 94vw); }
 }
 .tab-btn:hover { color: var(--ink); border-color: var(--ink-faint); }
 .tab-btn.activo { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---------- Badge de pendientes en el nav (Bandeja/Hechos) ---------- */
+.nav-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px;
+    background: var(--accent); color: var(--accent-ink);
+    font-size: 0.58rem; font-weight: 700; line-height: 1;
+}
 
 /* ---------- Login / landing ---------- */
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
@@ -580,6 +598,7 @@ details[open] > summary { background: var(--accent); color: var(--accent-ink); }
 .chip { font-family: "IBM Plex Mono"; font-size: 10px; background: var(--paper-sunken); border: 1px solid var(--rule-strong); border-radius: 999px; padding: 2px 9px; color: var(--ink-soft); }
 .historia-snippet { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 10px; line-height: 1.45; }
 .historia-card .facts { font-size: 11.5px; color: var(--ink-faint); font-family: "IBM Plex Mono"; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.historia-card .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 
 .hint-guard { margin-top: 14px; padding: 11px 13px; background: var(--status-pendiente-bg); border: 1px solid var(--status-pendiente); border-radius: 8px; font-size: 12px; color: var(--status-pendiente); line-height: 1.5; }
 .preview-chat { background: var(--paper-sunken); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }

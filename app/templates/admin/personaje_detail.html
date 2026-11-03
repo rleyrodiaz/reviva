@@ -13,23 +13,7 @@
 <div class="row-2col">
     <div class="col-narrow">
         <div class="card">
-            <details>
-                <summary>Editar personaje</summary>
-                <form method="post"
-                      action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/editar"
-                      style="margin-top:12px;">
-                    <label>Nombre</label>
-                    <input type="text" name="nombre" value="{{ personaje.nombre }}" required>
-                    <label>Relación con el paciente</label>
-                    <input type="text" name="relacion_con_paciente" value="{{ personaje.relacion_con_paciente or '' }}">
-                    <label>Foto (URL)</label>
-                    <input type="text" name="foto" value="{{ personaje.foto or '' }}" placeholder="/static/images/archivo.jpg">
-                    <p class="hint">Si la imagen está en tu PC, copiala a <code>app/static/images/</code> y poné acá <code>/static/images/archivo.jpg</code>.</p>
-                    <label>Tono de escritura</label>
-                    <textarea name="tono_escritura" rows="2">{{ personaje.tono_escritura or '' }}</textarea>
-                    <button class="btn" type="submit">Guardar cambios</button>
-                </form>
-            </details>
+            <button class="btn chico secundario" type="button" onclick="document.getElementById('modal-editar-personaje').showModal()">Editar personaje</button>
         </div>
     </div>
 
@@ -72,7 +56,7 @@
                     {% if es_admin_de(user, familia_id) %}
                     <form method="post"
                           action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ c.id }}/borrar"
-                          data-confirm="¿Borrar esta conversación completa, con todos sus nodos y ramas?">
+                          data-confirm="¿Borrar la conversación &quot;{{ c.nombre }}&quot; completa, con todos sus nodos y ramas?">
                         <button class="btn chico danger" type="submit">Borrar</button>
                     </form>
                     {% else %}
@@ -95,6 +79,25 @@
         <div class="modal-actions">
             <button type="button" class="btn quiet" onclick="document.getElementById('modal-nueva-conversacion').close()">Cancelar</button>
             <button class="btn" type="submit">Crear conversación</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="modal-editar-personaje">
+    <h2>Editar personaje</h2>
+    <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/editar">
+        <label>Nombre</label>
+        <input type="text" name="nombre" value="{{ personaje.nombre }}" required>
+        <label>Relación con el paciente</label>
+        <input type="text" name="relacion_con_paciente" value="{{ personaje.relacion_con_paciente or '' }}">
+        <label>Foto (URL)</label>
+        <input type="text" name="foto" value="{{ personaje.foto or '' }}" placeholder="/static/images/archivo.jpg">
+        <p class="hint">Si la imagen está en tu PC, copiala a <code>app/static/images/</code> y poné acá <code>/static/images/archivo.jpg</code>.</p>
+        <label>Tono de escritura</label>
+        <textarea name="tono_escritura" rows="2">{{ personaje.tono_escritura or '' }}</textarea>
+        <div class="modal-actions">
+            <button type="button" class="btn quiet" onclick="document.getElementById('modal-editar-personaje').close()">Cancelar</button>
+            <button class="btn" type="submit">Guardar cambios</button>
         </div>
     </form>
 </dialog>

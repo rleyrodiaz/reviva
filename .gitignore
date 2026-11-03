@@ -9,6 +9,8 @@ venv/
 ENV/
 env/
 
+historias/
+
 # Secrets and local configurations
 .env
 # .env.example   está sin claves, es de ejemplo

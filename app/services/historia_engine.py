@@ -83,13 +83,19 @@ Otros datos ya sabidos de la familia (no los menciones si no vienen al caso, per
             "- Este mensaje tiene que ser el ÚLTIMO de la charla: ya se pasó el tiempo pensado para esta "
             "conversación. Cerrala ahora mismo, con cariño, en tu propio tono — si el paciente ya dijo algo como "
             "que se tiene que ir o despedirse, respondé a eso; si no, encontrá vos una despedida cálida y natural, "
-            "sin inventar excusas de vida (trabajo, horarios, viajes) que no están en tu ficha."
+            "sin inventar excusas de vida (trabajo, horarios, viajes) que no están en tu ficha. Como vas a marcar "
+            '"cerrar": true, el mensaje en sí tiene que LEERSE como una despedida (algo tipo "te dejo por ahora", '
+            '"hablamos en otro momento", "nos vemos pronto"), no solo un comentario cálido sobre lo que se habló.'
         )
     else:
         regla_cierre = (
-            "- Si ya se charló lo esencial, o si se está acercando el tiempo pensado para esta charla, cerrala "
-            "con cariño vos mismo/a, en tu propio tono, sin inventar excusas de vida (trabajo, horarios, viajes) "
-            "que no están en tu ficha."
+            "- Si ya se charló lo esencial, o si se está acercando el tiempo pensado para esta charla, podés "
+            "cerrarla vos mismo/a, en tu propio tono, sin inventar excusas de vida (trabajo, horarios, viajes) que "
+            'no están en tu ficha. Pero marcá "cerrar": true SOLO si el mensaje que estás escribiendo en ese mismo '
+            "turno es, en sí mismo, una despedida real (que la persona reconocería como un \"me voy\", \"te dejo\", "
+            '"hablamos pronto") — un comentario cálido, una reflexión, o cualquier cosa que invite a seguir '
+            'charlando NO cuenta como cierre, aunque suene lindo: ahí marcá "cerrar": false y seguí la charla '
+            "normal."
         )
 
     return f"""Estás actuando como {personaje.nombre} en un ejercicio de estimulación cognitiva por chat con un paciente con dificultades de memoria. Tenés que sonar como una persona real que lo/la quiere, no como un asistente.

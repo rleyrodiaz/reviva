@@ -11,6 +11,27 @@
         iniciarMenuMovil();
         iniciarBotonesCerrarModal();
         iniciarTabs();
+        iniciarBotonesEditarTexto();
+    }
+
+    // ---- Botones "Editar" genéricos (ej. hechos de familia validados):
+    // [data-editar-texto] abre el mismo prompt de texto de siempre con el
+    // valor actual precargado, y al confirmar manda el form hermano
+    // [data-editar-form] con el nuevo valor — pasa por el mismo delegado de
+    // submit de iniciarModalesAjax, así funciona igual dentro de un modal
+    // o en la página completa. ----
+    function iniciarBotonesEditarTexto() {
+        document.addEventListener("click", function (ev) {
+            var boton = ev.target.closest("[data-editar-texto]");
+            if (!boton) return;
+            var form = document.getElementById(boton.dataset.editarForm);
+            if (!form) return;
+            window.promptApp("Editar", boton.dataset.editarTexto).then(function (valor) {
+                if (valor === null) return;
+                form.querySelector('input[name="texto"]').value = valor;
+                form.requestSubmit();
+            });
+        });
     }
 
     // ---- Modales desplazables: arrastrar desde el título (<h2>) mueve el
@@ -137,6 +158,16 @@
             if (!form || !cuerpoEl.contains(form)) return;
             if (form.dataset.confirm && form.dataset.confirmado !== "true") return; // dialogos.js confirma primero
             ev.preventDefault();
+            // Aprobar/desactivar desde la Bandeja: en vez de quedarse mirando
+            // la lista actualizada, cierra el modal y recarga la página de
+            // atrás — así se ve al toque el nuevo estado de la conversación
+            // en la pantalla donde estabas parado.
+            if (form.dataset.cerrarYRecargar === "true") {
+                fetch(form.action, { method: "POST", body: new FormData(form) })
+                    .then(function () { window.location.reload(); })
+                    .catch(function () { window.location.reload(); });
+                return;
+            }
             fetch(form.action, { method: "POST", body: new FormData(form) })
                 .then(function (resp) { return resp.text(); })
                 .then(function (html) { cuerpoEl.innerHTML = extraerFragmento(html); })

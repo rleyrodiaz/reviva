@@ -10,12 +10,12 @@
 </p>
 
 <div class="tabs" data-tabs>
-    <button type="button" class="tab-btn" data-tab-btn="validados">Validados ({{ validados|length }})</button>
-    <button type="button" class="tab-btn activo" data-tab-btn="pendientes">Pendientes ({{ pendientes|length }})</button>
-    <button type="button" class="tab-btn" data-tab-btn="descartados">Descartados ({{ descartados|length }})</button>
+    <button type="button" class="tab-btn {% if tab_activa == 'validados' %}activo{% endif %}" data-tab-btn="validados">Validados ({{ validados|length }})</button>
+    <button type="button" class="tab-btn {% if tab_activa == 'pendientes' %}activo{% endif %}" data-tab-btn="pendientes">Pendientes ({{ pendientes|length }})</button>
+    <button type="button" class="tab-btn {% if tab_activa == 'descartados' %}activo{% endif %}" data-tab-btn="descartados">Descartados ({{ descartados|length }})</button>
 </div>
 
-<div class="card tab-panel" data-tab-panel="pendientes">
+<div class="card tab-panel" data-tab-panel="pendientes" {% if tab_activa != 'pendientes' %}hidden{% endif %}>
     {% if not pendientes %}
     <p class="hint">No hay nada nuevo para revisar.</p>
     {% endif %}
@@ -44,16 +44,41 @@
     {% endfor %}
 </div>
 
-<div class="card tab-panel" data-tab-panel="validados" hidden>
+<div class="card tab-panel" data-tab-panel="validados" {% if tab_activa != 'validados' %}hidden{% endif %}>
     <p class="hint">Estos se le pasan a la IA en el prompt de cualquier historia de esta familia, si vienen al caso.</p>
+
+    {% if es_admin_de(user, familia_id) %}
+    <form method="post" action="/admin/familias/{{ familia_id }}/hechos" class="inline-form" style="margin-bottom:16px;">
+        <input type="text" name="texto" placeholder="Un dato que ya sabés que es cierto (ej. le encantaba el fútbol)" required style="flex:1;">
+        <button class="btn chico" type="submit">Agregar</button>
+    </form>
+    {% endif %}
+
     {% for h in validados %}
     <div class="conv-row">
         <div class="conv-main">
             <div class="name">{{ h.texto }}</div>
             <div class="meta">
-                {% if h.origen_sesion %}de "{{ h.origen_sesion.historia.titulo }}" · {% endif %}
+                {% if h.origen_sesion %}
+                de "{{ h.origen_sesion.historia.titulo }}" ·
+                {% elif h.creado_por %}
+                Manual, cargado por {{ h.creado_por.nombre }} ·
+                {% else %}
+                Manual ·
+                {% endif %}
                 validado
             </div>
+        </div>
+        <div class="conv-actions">
+            {% if es_admin_de(user, familia_id) %}
+            <button type="button" class="btn chico secundario" data-editar-texto="{{ h.texto }}" data-editar-form="editar-hecho-{{ h.id }}">Editar</button>
+            <form id="editar-hecho-{{ h.id }}" method="post" action="/admin/familias/{{ familia_id }}/hechos/{{ h.id }}/editar">
+                <input type="hidden" name="texto">
+            </form>
+            {% endif %}
+            <form method="post" action="/admin/familias/{{ familia_id }}/hechos/{{ h.id }}/borrar" data-confirm="¿Borrar el hecho &quot;{{ h.texto[:40] }}{% if h.texto|length > 40 %}…{% endif %}&quot;? No se puede deshacer.">
+                <button type="submit" class="btn-x" aria-label="Borrar">&times;</button>
+            </form>
         </div>
     </div>
     {% else %}

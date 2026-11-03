@@ -45,6 +45,14 @@
             </div>
             <div class="actions">
                 <a class="btn chico secundario" href="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ h.id }}">Abrir</a>
+                {% if es_admin_de(user, familia_id) %}
+                <form method="post" action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/historias/{{ h.id }}/borrar"
+                      data-confirm="¿Borrar la historia &quot;{{ h.titulo }}&quot; y todas sus sesiones? No se puede deshacer.">
+                    <button class="btn chico quiet" type="submit">Borrar</button>
+                </form>
+                {% else %}
+                <button type="button" class="btn chico quiet" data-aviso="{{ mensaje_requiere_admin }}">Borrar</button>
+                {% endif %}
             </div>
         </div>
         {% else %}

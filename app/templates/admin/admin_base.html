@@ -19,12 +19,13 @@
     <button type="button" class="hamburguesa" aria-label="Abrir menú" aria-expanded="false">☰</button>
     <div class="who">
         {% if familia_actual_id %}
+        {% set contadores = contadores_pendientes(familia_actual_id) %}
         <nav class="navlinks">
             <a href="/admin/familias/{{ familia_actual_id }}" {% if es_seccion_dashboard %}class="activo"{% endif %}>Dashboard</a>
             {% if es_admin_aqui %}
-            <a href="/admin/familias/{{ familia_actual_id }}/bandeja" data-modal-titulo="Bandeja de aprobación" {% if es_seccion_bandeja %}class="activo"{% endif %}>Bandeja</a>
+            <a href="/admin/familias/{{ familia_actual_id }}/bandeja" data-modal-titulo="Bandeja de aprobación" {% if es_seccion_bandeja %}class="activo"{% endif %}>Bandeja{% if contadores.bandeja > 0 %} <span class="nav-badge">{{ contadores.bandeja }}</span>{% endif %}</a>
             {% endif %}
-            <a href="/admin/familias/{{ familia_actual_id }}/hechos" data-modal-titulo="Hechos de familia" {% if es_seccion_hechos %}class="activo"{% endif %}>Hechos</a>
+            <a href="/admin/familias/{{ familia_actual_id }}/hechos" data-modal-titulo="Hechos de familia" {% if es_seccion_hechos %}class="activo"{% endif %}>Hechos{% if contadores.hechos > 0 %} <span class="nav-badge">{{ contadores.hechos }}</span>{% endif %}</a>
             {% if es_admin_aqui %}
             <a href="/admin/familias/{{ familia_actual_id }}/usuarios" {% if es_seccion_usuarios %}class="activo"{% endif %}>Usuarios</a>
             {% endif %}

@@ -18,17 +18,17 @@
         <span class="name">{{ h.personaje.nombre }} — Historia "{{ h.titulo }}"</span>
         <span class="when">#{{ h.id }}</span>
     </div>
-    <form method="post"
+    <form method="post" data-cerrar-y-recargar="true"
           action="/admin/familias/{{ familia_id }}/personajes/{{ h.personaje_id }}/historias/{{ h.id }}/bandeja/aprobar">
         <textarea name="mensaje" rows="2">{{ h.mensaje_propuesto }}</textarea>
         <div class="inbox-foot">
             <button class="btn" type="submit">Aprobar y enviar ahora</button>
         </div>
     </form>
-    <form method="post"
+    <form method="post" data-cerrar-y-recargar="true"
           action="/admin/familias/{{ familia_id }}/personajes/{{ h.personaje_id }}/historias/{{ h.id }}/bandeja/desactivar"
           style="margin-top:8px;"
-          data-confirm="¿Desactivar esta propuesta? No se manda nada — podés proponerla de nuevo cuando quieras.">
+          data-confirm="¿Desactivar la propuesta de &quot;{{ h.titulo }}&quot; para {{ h.personaje.nombre }}? No se manda nada — podés proponerla de nuevo cuando quieras.">
         <button class="btn chico quiet" type="submit">Desactivar</button>
     </form>
 </div>
@@ -41,15 +41,15 @@
         <span class="name">{{ g.personaje.nombre }}</span>
         <span class="when">#{{ g.id }}</span>
     </div>
-    <form method="post" action="/admin/familias/{{ familia_id }}/bandeja/{{ g.id }}/aprobar">
+    <form method="post" data-cerrar-y-recargar="true" action="/admin/familias/{{ familia_id }}/bandeja/{{ g.id }}/aprobar">
         <textarea name="texto_mensaje" rows="2">{{ g.texto_mensaje }}</textarea>
         <div class="inbox-foot">
             <button class="btn" type="submit">Aprobar y enviar ahora</button>
         </div>
     </form>
-    <form method="post" action="/admin/familias/{{ familia_id }}/bandeja/{{ g.id }}/desactivar"
+    <form method="post" data-cerrar-y-recargar="true" action="/admin/familias/{{ familia_id }}/bandeja/{{ g.id }}/desactivar"
           style="margin-top:8px;"
-          data-confirm="¿Desactivar este envío? No se manda y vuelve a borrador — queda a tu criterio cuándo reabrirlo.">
+          data-confirm="¿Desactivar el envío de {{ g.personaje.nombre }} (&quot;{{ g.texto_mensaje[:40] }}{% if g.texto_mensaje|length > 40 %}…{% endif %}&quot;)? No se manda y vuelve a borrador — queda a tu criterio cuándo reabrirlo.">
         <button class="btn chico quiet" type="submit">Desactivar</button>
     </form>
 </div>

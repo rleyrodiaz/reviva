@@ -293,8 +293,12 @@
         aristas.forEach(function (a) { if (a.destino === id) a.destino = null; });
     }
 
+    function _recorte(texto) {
+        return texto.length > 40 ? texto.slice(0, 40) + "…" : texto;
+    }
+
     function duplicarNodo(n) {
-        window.confirmarApp("¿Duplicar este nodo? Se crea una copia con sus ramas (mismos destinos).").then(function (ok) {
+        window.confirmarApp("¿Duplicar el nodo #" + n.id + " (\"" + _recorte(n.texto) + "\")? Se crea una copia con sus ramas (mismos destinos).").then(function (ok) {
             if (!ok) return;
             return fetch(baseUrl + "/guiones/" + n.id + "/duplicar", { method: "POST" }).then(function (r) {
                 if (!r.ok) throw new Error();
@@ -322,7 +326,7 @@
 
     function borrarNodo(n) {
         if (!esAdmin) { window.avisarApp(mensajeRequiereAdmin); return; }
-        window.confirmarApp("¿Querés borrar el nodo #" + n.id + "? También se borran sus ramas y queda huérfano cualquier otro nodo que lo tuviera como destino.").then(function (ok) {
+        window.confirmarApp("¿Querés borrar el nodo #" + n.id + " (\"" + _recorte(n.texto) + "\")? También se borran sus ramas y queda huérfano cualquier otro nodo que lo tuviera como destino.").then(function (ok) {
             if (!ok) return;
             return fetch(baseUrl + "/guiones/" + n.id + "/borrar", { method: "POST" }).then(function (r) {
                 if (!r.ok) throw new Error();
@@ -421,7 +425,7 @@
             return;
         }
         if (!esAdmin) { window.avisarApp(mensajeRequiereAdmin); return; }
-        window.confirmarApp("¿Borrar esta conexión?").then(function (ok) {
+        window.confirmarApp("¿Borrar la conexión \"" + (a.criterio || "sin match") + "\"?").then(function (ok) {
             if (!ok) return;
             return fetch(baseUrl + "/guiones/" + a.origen + "/ramas/" + a.id + "/borrar", { method: "POST" }).then(function (r) {
                 if (!r.ok) throw new Error();
@@ -436,15 +440,35 @@
         var svgRect = svg.getBoundingClientRect();
         var x = Math.max(0, ev.clientX - svgRect.left - ANCHO_DEFAULT / 2);
         var y = Math.max(0, ev.clientY - svgRect.top - ALTO_NODO / 2);
-        // El doble click abre el modal de siempre (fecha, tipo de respuesta,
-        // modo de envío, es_entrada) con la posición ya cargada — así el
-        // guion se termina de armar entero desde acá, sin ir a la tarjeta.
-        var campoX = document.getElementById("modal-nuevo-guion-pos-x");
-        var campoY = document.getElementById("modal-nuevo-guion-pos-y");
-        if (campoX) campoX.value = Math.round(x);
-        if (campoY) campoY.value = Math.round(y);
-        var modal = document.getElementById("modal-nuevo-guion");
-        if (modal) modal.showModal();
+        // El doble click crea el nodo ya mismo en esa posición (sin modal) y
+        // lo deja directamente en edición de texto, igual que al tocar un
+        // nodo existente — la única cosa que este form pedía era el mensaje.
+        // El endpoint sigue devolviendo el redirect de siempre (lo usa
+        // también el botón "+ Nuevo nodo" con su modal); como fetch lo
+        // sigue solo, de la página ya actualizada se saca el JSON fresco de
+        // #diagrama-datos en vez de pedirle al backend una respuesta nueva.
+        fetch(baseUrl + "/guiones", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "texto_mensaje=" + encodeURIComponent("Nuevo mensaje")
+                + "&pos_x=" + Math.round(x) + "&pos_y=" + Math.round(y),
+        }).then(function (r) { return r.text(); }).then(function (html) {
+            var doc = new DOMParser().parseFromString(html, "text/html");
+            var datosFrescos = doc.getElementById("diagrama-datos");
+            if (!datosFrescos) throw new Error();
+            var idsViejos = {};
+            nodos.forEach(function (n) { idsViejos[n.id] = true; });
+            var parsed = JSON.parse(datosFrescos.textContent);
+            nodos = parsed.nodos;
+            aristas = parsed.aristas;
+            porId = {};
+            nodos.forEach(function (n) { porId[n.id] = n; });
+            var nuevo = nodos.find(function (n) { return !idsViejos[n.id]; });
+            render();
+            if (nuevo && nodoDivs[nuevo.id]) {
+                iniciarEdicionTexto(nuevo, nodoDivs[nuevo.id].querySelector(".diagrama-nodo-texto"));
+            }
+        }).catch(function () { window.avisarApp("No se pudo crear el nodo."); });
     }
 
     function render() {

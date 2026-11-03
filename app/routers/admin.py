@@ -43,7 +43,7 @@ from app.services.auth import (
     require_superadmin,
     require_user,
 )
-from app.services.familias import es_admin_de, familias_navbar, list_familias_propias
+from app.services.familias import contadores_pendientes, es_admin_de, familias_navbar, list_familias_propias
 from app.services.importador_historia import extraer_texto_archivo
 
 router = APIRouter(prefix="/admin")
@@ -51,6 +51,7 @@ templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["static_version"] = static_version
 templates.env.globals["es_admin_de"] = es_admin_de
 templates.env.globals["familias_navbar"] = familias_navbar
+templates.env.globals["contadores_pendientes"] = contadores_pendientes
 templates.env.globals["mensaje_requiere_admin"] = MENSAJE_REQUIERE_ADMIN
 
 
@@ -372,16 +373,6 @@ def dashboard_familia(
         select(Personaje).where(Personaje.familia_id == familia_id)
     ).all()
     paciente = _paciente_de_familia(db, familia_id)
-    pendientes = db.scalars(
-        select(Guion)
-        .join(Personaje)
-        .where(Personaje.familia_id == familia_id, Guion.estado == EstadoGuion.pendiente_aprobacion)
-    ).all()
-    hechos_pendientes = db.scalars(
-        select(HechoFamiliar).where(
-            HechoFamiliar.familia_id == familia_id, HechoFamiliar.estado == EstadoHechoFamiliar.pendiente
-        )
-    ).all()
     return templates.TemplateResponse(
         "admin/familia_dashboard.html",
         {
@@ -390,8 +381,6 @@ def dashboard_familia(
             "familia": familia,
             "personajes": personajes,
             "paciente": paciente,
-            "cantidad_pendientes": len(pendientes),
-            "cantidad_hechos_pendientes": len(hechos_pendientes),
             "temas": list(TemaVisual),
             "tamanos_fuente": list(TamanoFuente),
         },
@@ -1353,9 +1342,11 @@ def desactivar_desde_bandeja(
 def listar_hechos(
     familia_id: int,
     request: Request,
+    tab: str = "pendientes",
     user: Usuario = Depends(require_familia_member),
     db: Session = Depends(get_db_dep),
 ):
+    tab_activa = tab if tab in ("pendientes", "validados", "descartados") else "pendientes"
     pendientes = db.scalars(
         select(HechoFamiliar)
         .where(HechoFamiliar.familia_id == familia_id, HechoFamiliar.estado == EstadoHechoFamiliar.pendiente)
@@ -1377,11 +1368,67 @@ def listar_hechos(
             "request": request,
             "user": user,
             "familia_id": familia_id,
+            "tab_activa": tab_activa,
             "pendientes": pendientes,
             "validados": validados,
             "descartados": descartados,
         },
     )
+
+
+@router.post("/familias/{familia_id}/hechos")
+def crear_hecho_manual(
+    familia_id: int,
+    texto: str = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    """Un hecho que el admin ya sabe que es cierto (no salió de lo que dijo
+    el paciente en una sesión) — por eso entra directo a validado, sin el
+    paso de revisión que sí necesita lo rescatado de la IA."""
+    texto_limpio = texto.strip()
+    if not texto_limpio:
+        raise HTTPException(400, "El texto no puede estar vacío.")
+    hecho = HechoFamiliar(
+        familia_id=familia_id,
+        texto=texto_limpio,
+        estado=EstadoHechoFamiliar.validado,
+        creado_por_id=user.id,
+    )
+    db.add(hecho)
+    return RedirectResponse(f"/admin/familias/{familia_id}/hechos?tab=validados", status_code=303)
+
+
+@router.post("/familias/{familia_id}/hechos/{hecho_id}/editar")
+def editar_hecho(
+    familia_id: int,
+    hecho_id: int,
+    texto: str = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    texto_limpio = texto.strip()
+    if not texto_limpio:
+        raise HTTPException(400, "El texto no puede estar vacío.")
+    hecho = db.get(HechoFamiliar, hecho_id)
+    if hecho is not None:
+        hecho.texto = texto_limpio
+    return RedirectResponse(f"/admin/familias/{familia_id}/hechos?tab=validados", status_code=303)
+
+
+@router.post("/familias/{familia_id}/hechos/{hecho_id}/borrar")
+def borrar_hecho(
+    familia_id: int,
+    hecho_id: int,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    """Borra un hecho validado para siempre — a diferencia de "descartar",
+    que lo saca de circulación pero lo deja a la vista por si se reconsidera."""
+    hecho = db.get(HechoFamiliar, hecho_id)
+    if hecho is not None:
+        db.delete(hecho)
+    return RedirectResponse(f"/admin/familias/{familia_id}/hechos?tab=validados", status_code=303)
 
 
 @router.post("/familias/{familia_id}/hechos/{hecho_id}/validar")

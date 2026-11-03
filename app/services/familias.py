@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.enums import UserRole
@@ -35,6 +35,39 @@ def familias_navbar(usuario: Usuario, familia_actual_id: int | None) -> dict:
             "actual_nombre": actual.nombre if actual else None,
             "todas": [{"id": f.id, "nombre": f.nombre} for f in familias],
         }
+    finally:
+        db.close()
+
+
+def contadores_pendientes(familia_id: int) -> dict:
+    """Para el badge del nav (Bandeja/Hechos): cuántos ítems están
+    esperando revisión en esta familia. Abre su propia sesión corta, igual
+    que familias_navbar, para no depender de la `db` de la ruta que
+    renderiza la página — así funciona en cualquier pantalla, no solo en
+    el dashboard."""
+    from app.db import SessionLocal
+    from app.models.enums import EstadoGuion, EstadoHechoFamiliar
+    from app.models.guion import Guion
+    from app.models.hecho_familiar import HechoFamiliar
+    from app.models.personaje import Personaje
+
+    db = SessionLocal()
+    try:
+        bandeja = db.scalar(
+            select(func.count())
+            .select_from(Guion)
+            .join(Personaje)
+            .where(Personaje.familia_id == familia_id, Guion.estado == EstadoGuion.pendiente_aprobacion)
+        )
+        hechos = db.scalar(
+            select(func.count())
+            .select_from(HechoFamiliar)
+            .where(
+                HechoFamiliar.familia_id == familia_id,
+                HechoFamiliar.estado == EstadoHechoFamiliar.pendiente,
+            )
+        )
+        return {"bandeja": bandeja or 0, "hechos": hechos or 0}
     finally:
         db.close()
 
