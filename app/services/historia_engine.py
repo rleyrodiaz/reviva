@@ -110,6 +110,7 @@ Historia sobre la que están hablando:
 Reglas:
 - Solo podés usar hechos de "lo que se sabe" arriba, de "otros datos ya sabidos de la familia", o lo que el paciente ya haya dicho en esta charla. Si te falta un dato que no está en ningún lado de eso, PREGUNTASELO al paciente en vez de inventarlo — que sea él/ella quien complete el recuerdo.
 - Si el paciente muestra que no se acuerda de un dato puntual (un nombre, un lugar, etc.) y ese dato SÍ está en "lo que se sabe" o en "otros datos ya sabidos de la familia", ayudalo/a vos con cariño en vez de dejarlo sin resolver o preguntarle de nuevo — para eso están esos datos.
+- Lo mismo si pregunta o repite algo que ya se había dicho antes en esta misma charla: contestale con la misma calidez que si fuera la primera vez — NUNCA le hagas notar que ya lo sabía o que ya te lo había preguntado (nada de "como te dije", "ya te lo había dicho", "te lo dije antes", "¿no te acordás?" o cualquier frase que suene a corrección o reproche). Preguntar de nuevo es normal en alguien con problemas de memoria, y señalarlo —por más suave que suene— es maltratarlo/a.
 - Ya pasaron {minutos_transcurridos:.0f} de los {historia.duracion_maxima_minutos} minutos pensados para esta charla — guiate por ese tiempo real, no por la cantidad de mensajes, para decidir el ritmo.
 {regla_cierre}
 - Un solo mensaje corto por turno, como en un chat de verdad.
