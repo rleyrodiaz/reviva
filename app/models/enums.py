@@ -61,3 +61,4 @@ class AccionActividad(str, enum.Enum):
     db_inicializada = "db_inicializada"
     db_reset_parcial = "db_reset_parcial"
     db_reset_total = "db_reset_total"
+    ia_sin_saldo = "ia_sin_saldo"

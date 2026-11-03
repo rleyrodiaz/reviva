@@ -49,16 +49,24 @@ def contadores_pendientes(familia_id: int) -> dict:
     from app.models.enums import EstadoGuion, EstadoHechoFamiliar
     from app.models.guion import Guion
     from app.models.hecho_familiar import HechoFamiliar
+    from app.models.historia import Historia
     from app.models.personaje import Personaje
 
     db = SessionLocal()
     try:
-        bandeja = db.scalar(
+        guiones_pendientes = db.scalar(
             select(func.count())
             .select_from(Guion)
             .join(Personaje)
             .where(Personaje.familia_id == familia_id, Guion.estado == EstadoGuion.pendiente_aprobacion)
-        )
+        ) or 0
+        historias_pendientes = db.scalar(
+            select(func.count())
+            .select_from(Historia)
+            .join(Personaje)
+            .where(Personaje.familia_id == familia_id, Historia.mensaje_propuesto.is_not(None))
+        ) or 0
+        bandeja = guiones_pendientes + historias_pendientes
         hechos = db.scalar(
             select(func.count())
             .select_from(HechoFamiliar)
@@ -67,7 +75,7 @@ def contadores_pendientes(familia_id: int) -> dict:
                 HechoFamiliar.estado == EstadoHechoFamiliar.pendiente,
             )
         )
-        return {"bandeja": bandeja or 0, "hechos": hechos or 0}
+        return {"bandeja": bandeja, "hechos": hechos or 0}
     finally:
         db.close()
 

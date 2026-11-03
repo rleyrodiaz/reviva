@@ -3,6 +3,15 @@
 {% block contenido %}
 <h1>{{ familia.nombre }}</h1>
 
+{% if alerta_ia_sin_saldo %}
+<div class="banner-alerta">
+    ⚠ Se agotaron los créditos de la cuenta de IA ({{ alerta_ia_sin_saldo.detalle or "proveedor configurado" }}).
+    Las respuestas van a usar mensajes genéricos hasta que se recarguen — detectado
+    {{ alerta_ia_sin_saldo.creado_en.strftime("%d/%m %H:%M") }}.
+    <a href="/admin/familias/{{ familia.id }}/activity-log">Ver en el Activity log</a>.
+</div>
+{% endif %}
+
 <div class="row-2col">
     <div class="col-narrow">
         {% if paciente %}

@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import delete, func, select, text
+from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.db import Base, engine, get_db_dep
@@ -360,6 +360,20 @@ def quitar_usuario_familia(
     return RedirectResponse(f"/admin/familias/{familia_id}/usuarios", status_code=303)
 
 
+def _alerta_ia_sin_saldo(db: Session) -> ActivityLog | None:
+    """Para el banner del dashboard: el aviso más reciente de "sin saldo de
+    IA" (evento global, ver ia_cliente._registrar_saldo_agotado), si pasó
+    en las últimas 24hs — pasado ese tiempo se asume que ya se resolvió (se
+    recargaron créditos) y deja de mostrarse solo, sin necesidad de un
+    estado "resuelto" aparte."""
+    hace_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    return db.scalar(
+        select(ActivityLog)
+        .where(ActivityLog.accion == AccionActividad.ia_sin_saldo, ActivityLog.creado_en >= hace_24h)
+        .order_by(ActivityLog.creado_en.desc())
+    )
+
+
 @router.get("/familias/{familia_id}", response_class=HTMLResponse)
 def dashboard_familia(
     familia_id: int,
@@ -381,6 +395,7 @@ def dashboard_familia(
             "familia": familia,
             "personajes": personajes,
             "paciente": paciente,
+            "alerta_ia_sin_saldo": _alerta_ia_sin_saldo(db) if es_admin_de(user, familia_id) else None,
             "temas": list(TemaVisual),
             "tamanos_fuente": list(TamanoFuente),
         },
@@ -1487,6 +1502,7 @@ ACCION_LABELS = {
     "db_inicializada": "DB inicializada",
     "db_reset_parcial": "Reset parcial de datos",
     "db_reset_total": "Reset total",
+    "ia_sin_saldo": "Sin saldo de IA",
 }
 
 ACTIVITY_LOG_PAGE_SIZE = 50
@@ -1509,7 +1525,16 @@ def activity_log_page(
     all_entries = db.scalars(
         select(ActivityLog)
         .options(joinedload(ActivityLog.usuario))
-        .where(ActivityLog.familia_id == familia_id)
+        .where(
+            or_(
+                ActivityLog.familia_id == familia_id,
+                # "Sin saldo de IA" es un evento global (afecta a toda la
+                # app por igual, no a una familia puntual) — se muestra en
+                # el log de todas, a diferencia del resto de los eventos sin
+                # familia_id (ej. logins), que quedan como están.
+                ActivityLog.accion == AccionActividad.ia_sin_saldo,
+            )
+        )
         .order_by(ActivityLog.creado_en.desc())
     ).unique().all()
 
