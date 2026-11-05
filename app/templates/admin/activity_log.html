@@ -2,6 +2,7 @@
 {% block title %}Activity log — {{ familia.nombre }}{% endblock %}
 {% block contenido %}
 <p><a href="/admin/familias/{{ familia.id }}">&larr; volver</a></p>
+<div id="contenido-modal">
 
 <div class="card-header-row">
     <h2>Activity log de {{ familia.nombre }}</h2>
@@ -101,4 +102,5 @@
 </div>
 {% endif %}
 {% endif %}
+</div>
 {% endblock %}

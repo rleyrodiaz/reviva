@@ -28,21 +28,9 @@
             <a href="/admin/familias/{{ familia_actual_id }}/hechos" data-modal-titulo="Hechos de familia" {% if es_seccion_hechos %}class="activo"{% endif %}>Hechos{% if contadores.hechos > 0 %} <span class="nav-badge">{{ contadores.hechos }}</span>{% endif %}</a>
             {% if es_admin_aqui %}
             <a href="/admin/familias/{{ familia_actual_id }}/usuarios" {% if es_seccion_usuarios %}class="activo"{% endif %}>Usuarios</a>
+            <a href="/admin/familias/{{ familia_actual_id }}/settings" {% if es_seccion_admin %}class="activo"{% endif %}>Settings</a>
             {% endif %}
         </nav>
-        {% if es_admin_aqui %}
-        <div class="dropdown">
-            <button type="button" class="dropdown-toggle {% if es_seccion_admin %}activo{% endif %}">Admin ▾</button>
-            <div class="dropdown-menu">
-                <a href="/admin/familias/{{ familia_actual_id }}/activity-log">Activity log</a>
-                <a href="/admin/familias/{{ familia_actual_id }}/settings">Settings</a>
-                {% if user.es_superadmin %}
-                <div class="dropdown-divider"></div>
-                <a href="/admin/settings">Settings global</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
         {% endif %}
 
         {% if familia_actual_id %}
@@ -132,6 +120,23 @@
         <button type="button" class="btn quiet" onclick="document.getElementById('dialog-modal-contenido').close()">Cerrar</button>
     </div>
 </dialog>
+
+<dialog id="dialog-modal-iframe" class="modal-telefono">
+    <h2 id="dialog-modal-iframe-titulo">WhatsApp</h2>
+    <iframe id="dialog-modal-iframe-frame" src="about:blank"></iframe>
+</dialog>
+
+{% set _chat_disparado = request.query_params.get("chat_disparado") %}
+{% set _chat_disparado_paciente = request.query_params.get("chat_disparado_paciente") %}
+{% if modo_demo and _chat_disparado and _chat_disparado_paciente %}
+{# Puesto acá (no en cada página) porque la página "de atrás" de la Bandeja
+   puede ser cualquiera — dashboard, detalle de historia, etc. — y porque
+   tras aprobar desde la Bandeja (siempre un modal AJAX) el flujo de
+   data-cerrar-y-recargar navega de vuelta a esa página con estos dos query
+   params, no se queda mirando el fragmento de la Bandeja (ver dialogos.js
+   / _url_con_chat_disparado en admin.py). #}
+<a id="auto-abrir-chat-iframe" href="/chat/{{ _chat_disparado_paciente }}/{{ _chat_disparado }}" data-modal-iframe="WhatsApp" style="display:none;"></a>
+{% endif %}
 
 <dialog id="dialog-aviso">
     <h2>Aviso</h2>

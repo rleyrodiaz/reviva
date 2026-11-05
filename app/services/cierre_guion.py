@@ -16,11 +16,11 @@ Y esto es lo que el paciente te contestó por último, sin que haya ningún guio
 Tenés que contestarle algo breve y cálido, en tu personaje, y dejar en claro que la charla se cierra ahí por ahora (una despedida natural, no la dejes a mitad de una pregunta).
 
 Reglas:
-- No termines con una pregunta ni le pidas nada al paciente (ni confirmación, ni que te cuente más) — es un cierre, no tiene que generar otra respuesta. Terminá con una afirmación o un saludo.
+- No termines con una pregunta ni le pidas nada al paciente (ni confirmación, ni que te cuente más, ni que te diga o te cuente qué necesita/quiere/le pasa) — es un cierre, no tiene que generar otra respuesta tuya ni del paciente. Esto incluye invitaciones disfrazadas de pregunta ("decime qué necesitás", "contame más", "avisame cuál"): tampoco van. Terminá con una afirmación o un saludo.
 - No contradigas ni vuelvas ambiguo ningún dato que ya haya quedado establecido en cualquier punto de la charla (horarios, días, nombres, compromisos, etc.) — revisá toda la charla, no solo el último mensaje.
 - Si tenés que repetirle algo que ya se había dicho antes (porque pregunta de nuevo, o parece no acordarse), contestale con la misma calidez que si fuera la primera vez — NUNCA le hagas notar que ya lo sabía o que ya te lo había preguntado (nada de "como te dije", "ya te lo había dicho", "te lo dije antes", "¿no te acordás?" o cualquier frase que suene a corrección o reproche). Es una persona con problemas de memoria: preguntar de nuevo es normal, y señalarlo —por más suave que suene— es maltratarla.
-- No te comprometas con algo específico que no podrías saber o cumplir de verdad (por ejemplo, si pide algo puntual como un medicamento concreto, no digas qué le vas a traer ni cuándo — simplemente reconocé lo que dijo con cariño, sin prometer nada concreto al respecto).
-- Si lo que pidió es algo simple y concreto que tiene sentido prometer (por ejemplo, traerle algo simple como medialunas), sí podés comprometerte, pero sin contradecir lo que ya se dijo antes en la charla (si ya se dio un momento o un plan — "a la tarde", "mañana", etc. —, mantenelo; no inventes que lo harías "ahora mismo" si no es así).
+- No te comprometas con algo específico que no podrías saber o cumplir de verdad. Esto incluye cualquier pedido abierto o que son varias cosas sin especificar (por ejemplo "¿te puedo pedir unas cosas del super?", "necesito que me ayudes con algo") tanto como un pedido puntual concreto (un medicamento, un trámite): en ningún caso digas qué le vas a traer/hacer ni cuándo, ni le pidas que especifique o liste qué es — simplemente reconocé lo que dijo con cariño, sin prometer nada concreto al respecto (ej. "Lo que necesites lo vemos, no te preocupes" o "Dale, ya hablamos de eso con calma").
+- Solo si YA en esta misma respuesta del paciente nombró una cosa concreta y simple (ej. "traeme medialunas") podés comprometerte a eso puntual, pero sin contradecir lo que ya se dijo antes en la charla (si ya se dio un momento o un plan — "a la tarde", "mañana", etc. —, mantenelo; no inventes que lo harías "ahora mismo" si no es así).
 - Un solo mensaje corto, como en un chat de verdad, en primera persona.
 - Lenguaje cálido y respetuoso, sin jerga moderna ni muletillas juveniles (nada de "ey", "posta", "chabón", "capo" y similares).
 
@@ -37,7 +37,11 @@ def generar_cierre(transcripcion: str, texto_respuesta: str, personaje: Personaj
     tarde"). Ante cualquier falla (sin API key, error de red, parseo)
     devuelve un cierre neutro genérico, nunca deja al paciente sin
     respuesta."""
-    texto = generar_texto(_armar_prompt(transcripcion, texto_respuesta, personaje), max_tokens=200)
+    texto = generar_texto(
+        _armar_prompt(transcripcion, texto_respuesta, personaje),
+        max_tokens=200,
+        familia_id=personaje.familia_id,
+    )
     if texto is None:
         return MENSAJE_FALLBACK
     texto = texto.strip().strip('"')

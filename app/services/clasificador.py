@@ -44,7 +44,7 @@ def _parsear_resultado(raw: str) -> ResultadoClasificacion:
 
 
 def clasificar_respuesta(
-    pregunta: str, texto_respuesta: str, ramas: list[tuple[int, str]]
+    pregunta: str, texto_respuesta: str, ramas: list[tuple[int, str]], familia_id: int | None = None
 ) -> ResultadoClasificacion:
     """Adaptador aislado (SPEC sección 6): dada la pregunta del guion, la
     respuesta del paciente y las ramas disponibles -(id, criterio)- de ESE
@@ -60,7 +60,7 @@ def clasificar_respuesta(
         return ResultadoClasificacion(rama_id=None, confianza=0.0)
 
     prompt = _armar_prompt(pregunta, texto_respuesta, ramas)
-    raw = generar_texto(prompt, max_tokens=200)
+    raw = generar_texto(prompt, max_tokens=200, familia_id=familia_id)
     if raw is None:
         return ResultadoClasificacion(rama_id=None, confianza=0.0)
 

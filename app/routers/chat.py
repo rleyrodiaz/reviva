@@ -79,7 +79,10 @@ def lista_contactos(paciente_id: int, request: Request, db: Session = Depends(ge
             .join(HistoriaSesion)
             .join(Historia)
             .where(Historia.personaje_id == p.id, HistoriaSesion.paciente_id == paciente.id)
-            .order_by(HistoriaMensaje.creado_en.desc())
+            # Por id, no por creado_en: ver nota en HistoriaSesion.mensajes —
+            # el mensaje del paciente y la respuesta del personaje pueden
+            # compartir el mismo creado_en (misma transacción).
+            .order_by(HistoriaMensaje.id.desc())
             .limit(1)
         )
 

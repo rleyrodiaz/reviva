@@ -1,0 +1,76 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}API Keys — {{ familia.nombre }}{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia.id }}/settings">&larr; Settings</a></p>
+<div id="contenido-modal">
+<h2>API Keys de {{ familia.nombre }}</h2>
+<p class="hint">
+    La key de cada proveedor queda cifrada en la base — nunca se vuelve a mostrar completa, solo
+    sus últimos caracteres. Esta familia puede cargar más de un proveedor, pero solo uno está
+    "activo" a la vez: es el que usan de verdad sus conversaciones e historias.
+</p>
+
+{% if msg == 'guardada_ok' %}
+<div class="card" style="border-color: var(--status-enviado); color: var(--status-enviado);">API key guardada.</div>
+{% endif %}
+
+{% if not familia.proveedor_ia_activo %}
+<p class="hint-guard">
+    ⚠ Esta familia todavía no tiene un proveedor de IA activo — sus conversaciones e historias no
+    van a poder generar respuestas de IA hasta que cargues una key abajo.
+</p>
+{% endif %}
+
+<div class="card">
+    <table>
+        <tr><th>Proveedor</th><th>Key</th><th>Actualizada</th><th>Activo</th><th></th></tr>
+        {% for k in keys %}
+        <tr>
+            <td style="text-transform:capitalize;">{{ k.proveedor }}</td>
+            <td><code>{{ mascara[k.id] }}</code></td>
+            <td>{{ k.actualizado_en.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>
+                {% if familia.proveedor_ia_activo == k.proveedor %}
+                <span class="stamp enviado">activo</span>
+                {% else %}
+                <form method="post" action="/admin/familias/{{ familia.id }}/settings/api-keys/activo">
+                    <input type="hidden" name="proveedor" value="{{ k.proveedor }}">
+                    <button class="btn chico secundario" type="submit">Usar este</button>
+                </form>
+                {% endif %}
+            </td>
+            <td>
+                <form method="post" action="/admin/familias/{{ familia.id }}/settings/api-keys/{{ k.id }}/borrar"
+                      data-confirm="¿Borrar la API key de {{ k.proveedor }}? Si está activa, esta familia se queda sin IA hasta que cargues otra.">
+                    <button class="btn chico danger" type="submit">Borrar</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not keys %}
+        <tr><td colspan="5" class="hint">Todavía no se cargó ninguna API key.</td></tr>
+        {% endif %}
+    </table>
+</div>
+
+<div class="card">
+    <h3>Cargar / reemplazar una key</h3>
+    <form method="post" action="/admin/familias/{{ familia.id }}/settings/api-keys" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+        <div style="flex:1; min-width:160px;">
+            <label>Proveedor</label>
+            <select name="proveedor" required>
+                {% for p in proveedores_disponibles %}
+                <option value="{{ p }}" style="text-transform:capitalize;">{{ p }}{% if p in proveedores_configurados %} (reemplazar){% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div style="flex:2; min-width:260px;">
+            <label>API key</label>
+            <input type="password" name="api_key" autocomplete="off" required>
+        </div>
+        <button class="btn chico" type="submit">Guardar</button>
+    </form>
+    <p class="hint">Si el proveedor ya tenía una key cargada, esto la reemplaza — no hace falta borrarla primero.</p>
+</div>
+</div>
+{% endblock %}

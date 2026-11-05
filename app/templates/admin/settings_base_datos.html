@@ -1,8 +1,9 @@
 {% extends "admin/admin_base.html" %}
-{% block title %}Settings — {{ familia.nombre }}{% endblock %}
+{% block title %}Settings de base de datos — {{ familia.nombre }}{% endblock %}
 {% block contenido %}
-<p><a href="/admin/familias/{{ familia.id }}">&larr; volver</a></p>
-<h2>Settings de {{ familia.nombre }}</h2>
+<p><a href="/admin/familias/{{ familia.id }}/settings">&larr; Settings</a></p>
+<div id="contenido-modal">
+<h2>Settings de base de datos de {{ familia.nombre }}</h2>
 
 {% if msg == 'reset_tables_ok' %}
 <div class="card" style="border-color: var(--status-enviado); color: var(--status-enviado);">Tablas seleccionadas regeneradas correctamente.</div>
@@ -18,7 +19,7 @@
         Borra datos que se van acumulando solos con el uso (no el contenido que armaste a mano:
         personajes, conversaciones y guiones quedan intactos). Afecta solo a <strong>{{ familia.nombre }}</strong>.
     </p>
-    <form method="post" action="/admin/familias/{{ familia.id }}/settings/reset-tables" id="form-reset-tables">
+    <form method="post" action="/admin/familias/{{ familia.id }}/settings/base-datos/reset-tables" id="form-reset-tables">
         <div style="display:flex; flex-direction:column; gap:10px; margin:14px 0;">
             {% for key, cfg in reset_tables.items() %}
             <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
@@ -31,22 +32,10 @@
             {% endfor %}
         </div>
         <label for="confirm-tables-input">Escribí <code>BORRAR</code> para confirmar</label>
-        <input type="text" id="confirm-tables-input" name="confirm" autocomplete="off" placeholder="BORRAR" style="max-width:220px;">
+        <input type="text" id="confirm-tables-input" name="confirm" autocomplete="off" placeholder="BORRAR" style="max-width:220px;"
+               data-confirma-escribiendo="BORRAR" data-habilita-boton="btn-reset-tables" data-requiere-chk=".reset-table-chk">
         <button id="btn-reset-tables" class="btn danger" type="submit" disabled>Regenerar seleccionadas</button>
     </form>
 </div>
-
-{% if user.es_superadmin %}
-<p class="hint">¿Buscás resetear TODO el sistema (todas las familias)? Eso vive en <a href="/admin/settings">Settings global</a>.</p>
-{% endif %}
-
-<script>
-function actualizarBtnResetTablas() {
-    var algunaSeleccionada = [].slice.call(document.querySelectorAll('.reset-table-chk')).some(function (c) { return c.checked; });
-    var confirmaOk = document.getElementById('confirm-tables-input').value === 'BORRAR';
-    document.getElementById('btn-reset-tables').disabled = !(algunaSeleccionada && confirmaOk);
-}
-document.getElementById('confirm-tables-input').addEventListener('input', actualizarBtnResetTablas);
-document.querySelectorAll('.reset-table-chk').forEach(function (c) { c.addEventListener('change', actualizarBtnResetTablas); });
-</script>
+</div>
 {% endblock %}

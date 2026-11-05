@@ -1,6 +1,7 @@
 from app.models.familia import Familia
 from app.models.usuario import Usuario
 from app.models.familia_membership import FamiliaMembership
+from app.models.familia_api_key import FamiliaApiKey
 from app.models.paciente import Paciente
 from app.models.personaje import Personaje
 from app.models.conversacion import Conversacion
@@ -18,6 +19,7 @@ __all__ = [
     "Familia",
     "Usuario",
     "FamiliaMembership",
+    "FamiliaApiKey",
     "Paciente",
     "Personaje",
     "Conversacion",

@@ -19,9 +19,17 @@
             <div class="patient-link">
                 <div>
                     <div class="who">💬 Chat de {{ paciente.nombre }}</div>
+                    {% if modo_demo %}
+                    <div class="sub">Modo prueba: se abre solo al disparar una conversación o historia.</div>
+                    {% else %}
                     <div class="sub">/chat/{{ paciente.id }} · sin login</div>
+                    {% endif %}
                 </div>
+                {% if modo_demo %}
+                <button type="button" class="btn chico quiet" data-aviso="En modo prueba el chat no se abre a mano — se abre solo, directo a la conversación, al aprobar o disparar un guion o una historia.">Abrir</button>
+                {% else %}
                 <a class="btn chico" href="/chat/{{ paciente.id }}" target="_blank">Abrir</a>
+                {% endif %}
             </div>
 
             <form method="post" action="/admin/familias/{{ familia.id }}/pacientes/{{ paciente.id }}/configuracion">

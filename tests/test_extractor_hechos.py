@@ -10,9 +10,14 @@ class _MensajeFalso:
         self.texto = texto
 
 
+class _PersonajeFalso:
+    familia_id = 1
+
+
 class _HistoriaFalsa:
     titulo = "El viaje al mar"
     contenido = "Fueron en el Renault celeste."
+    personaje = _PersonajeFalso()
 
 
 def test_sin_mensajes_de_paciente_no_llama_a_la_ia():

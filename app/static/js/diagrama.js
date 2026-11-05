@@ -266,6 +266,9 @@
                         }).then(function (data) {
                             var idx = aristas.findIndex(function (x) { return x.id === data.arista.id && x.tipo === data.arista.tipo; });
                             if (idx >= 0) aristas[idx] = data.arista; else aristas.push(data.arista);
+                            // Ahora algo lo apunta como destino: ya no está huérfano,
+                            // aunque el nodo venga de la carga inicial de la página.
+                            if (destinoId != null && porId[destinoId]) porId[destinoId].huerfano = false;
                             render();
                         });
                     }).catch(function (e) { window.avisarApp(e.message || "No se pudo conectar."); });

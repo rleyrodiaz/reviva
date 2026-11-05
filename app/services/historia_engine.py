@@ -156,7 +156,7 @@ def generar_siguiente_mensaje(
     prompt = _armar_prompt(
         historia, personaje, mensajes, hechos_familiares or [], minutos_transcurridos, forzar_cierre
     )
-    raw = generar_texto(prompt, max_tokens=400)
+    raw = generar_texto(prompt, max_tokens=400, familia_id=personaje.familia_id)
     if raw is None:
         return (MENSAJE_FALLBACK_CIERRE if mensajes else MENSAJE_FALLBACK_INICIO), (forzar_cierre or bool(mensajes))
     try:

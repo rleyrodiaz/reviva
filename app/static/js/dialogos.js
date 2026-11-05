@@ -8,10 +8,49 @@
         iniciarBotonesSinPermiso();
         iniciarModalesDesplazables();
         iniciarModalesAjax();
+        iniciarModalesIframe();
         iniciarMenuMovil();
         iniciarBotonesCerrarModal();
         iniciarTabs();
         iniciarBotonesEditarTexto();
+        iniciarConfirmarEscribiendo();
+        dispararAutoAbrirChat(document);
+    }
+
+    // ---- MODO_DEMO: tras aprobar/disparar un guion o una historia (lo que
+    // manda el mensaje de verdad), el backend deja un link oculto
+    // [#auto-abrir-chat-iframe] (con data-modal-iframe) en el HTML que
+    // devuelve — clickearlo por código dispara el mismo listener delegado
+    // de iniciarModalesIframe, así se abre la ventana de WhatsApp sola,
+    // directo a esa conversación. Hay que llamarlo tanto al cargar la
+    // página entera (detalle de historia) como cada vez que
+    // iniciarModalesAjax pisa el innerHTML del modal (Bandeja, que siempre
+    // se abre así — ver data-modal-titulo en el nav). ----
+    function dispararAutoAbrirChat(raiz) {
+        var auto = raiz.querySelector("#auto-abrir-chat-iframe");
+        if (auto) auto.click();
+    }
+
+    // ---- MODO_DEMO: tras aprobar algo con data-cerrar-y-recargar=true
+    // (Bandeja), la respuesta real está en una URL con ?chat_disparado=...
+    // (porque fetch sigue el redirect 303 solo) pero esa URL nunca llega a
+    // la barra de direcciones — recargarDetras() la lee de ahí y la suma a
+    // la página de atrás antes de recargarla, para que admin_base.html la
+    // vea y abra la ventana de WhatsApp sola. ----
+    function recargarDetras(urlRespuesta) {
+        var params;
+        try { params = new URL(urlRespuesta, window.location.href).searchParams; }
+        catch (e) { params = new URLSearchParams(); }
+        var personajeId = params.get("chat_disparado");
+        var pacienteId = params.get("chat_disparado_paciente");
+        if (!personajeId || !pacienteId) {
+            window.location.reload();
+            return;
+        }
+        var destino = new URL(window.location.href);
+        destino.searchParams.set("chat_disparado", personajeId);
+        destino.searchParams.set("chat_disparado_paciente", pacienteId);
+        window.location.href = destino.toString();
     }
 
     // ---- Botones "Editar" genéricos (ej. hechos de familia validados):
@@ -115,6 +154,34 @@
         });
     }
 
+    // ---- Botón que solo se habilita escribiendo un texto exacto (ej.
+    // "BORRAR"/"RESET" en los resets de Settings) y, opcionalmente, con al
+    // menos un checkbox de un grupo tildado. Delegado en document (no
+    // document.getElementById + addEventListener puntual de la página)
+    // porque un <script> propio de la página no se ejecuta cuando ese HTML
+    // se carga adentro de un modal vía innerHTML (ver iniciarModalesAjax) —
+    // así funciona igual en la página completa o adentro del modal.
+    // [data-confirma-escribiendo]=texto esperado,
+    // [data-habilita-boton]=id del botón a habilitar,
+    // [data-requiere-chk]=selector opcional de checkboxes (alguno tildado). ----
+    function iniciarConfirmarEscribiendo() {
+        function evaluarTodos() {
+            document.querySelectorAll("[data-confirma-escribiendo]").forEach(function (input) {
+                var boton = document.getElementById(input.dataset.habilitaBoton);
+                if (!boton) return;
+                var textoOk = input.value === input.dataset.confirmaEscribiendo;
+                var grupoOk = true;
+                if (input.dataset.requiereChk) {
+                    grupoOk = [].slice.call(document.querySelectorAll(input.dataset.requiereChk))
+                        .some(function (c) { return c.checked; });
+                }
+                boton.disabled = !(textoOk && grupoOk);
+            });
+        }
+        document.addEventListener("input", evaluarTodos);
+        document.addEventListener("change", evaluarTodos);
+    }
+
     // ---- Modal genérico "cargado por AJAX": lo usan los links con
     // data-modal-titulo (Bandeja, Hechos de familia) para abrir esa pantalla
     // en un <dialog> en vez de navegar — se trae el HTML de la página de
@@ -140,7 +207,7 @@
             cuerpoEl.innerHTML = "<p class=\"hint\">Cargando…</p>";
             return fetch(url)
                 .then(function (resp) { return resp.text(); })
-                .then(function (html) { cuerpoEl.innerHTML = extraerFragmento(html); })
+                .then(function (html) { cuerpoEl.innerHTML = extraerFragmento(html); dispararAutoAbrirChat(cuerpoEl); })
                 .catch(function () { cuerpoEl.innerHTML = "<p class=\"hint\">No se pudo cargar. Probá de nuevo.</p>"; });
         }
 
@@ -158,20 +225,59 @@
             if (!form || !cuerpoEl.contains(form)) return;
             if (form.dataset.confirm && form.dataset.confirmado !== "true") return; // dialogos.js confirma primero
             ev.preventDefault();
+            // Respeta el method real del form — un form de filtros (ej.
+            // Activity log) es GET: forzarlo a POST le pegaría a una ruta
+            // que no la acepta.
+            var esGet = (form.getAttribute("method") || "").toLowerCase() === "get";
+            var url = form.action;
+            var opciones = {};
+            if (esGet) {
+                url = form.action.split("?")[0] + "?" + new URLSearchParams(new FormData(form)).toString();
+            } else {
+                opciones = { method: "POST", body: new FormData(form) };
+            }
             // Aprobar/desactivar desde la Bandeja: en vez de quedarse mirando
             // la lista actualizada, cierra el modal y recarga la página de
             // atrás — así se ve al toque el nuevo estado de la conversación
             // en la pantalla donde estabas parado.
             if (form.dataset.cerrarYRecargar === "true") {
-                fetch(form.action, { method: "POST", body: new FormData(form) })
-                    .then(function () { window.location.reload(); })
+                fetch(url, opciones)
+                    .then(function (resp) { recargarDetras(resp.url); })
                     .catch(function () { window.location.reload(); });
                 return;
             }
-            fetch(form.action, { method: "POST", body: new FormData(form) })
+            fetch(url, opciones)
                 .then(function (resp) { return resp.text(); })
-                .then(function (html) { cuerpoEl.innerHTML = extraerFragmento(html); })
+                .then(function (html) { cuerpoEl.innerHTML = extraerFragmento(html); dispararAutoAbrirChat(cuerpoEl); })
                 .catch(function () { cuerpoEl.innerHTML = "<p class=\"hint\">No se pudo guardar. Probá de nuevo.</p>"; });
+        });
+    }
+
+    // ---- Modal "iframe" (MODO_DEMO): para páginas que no encajan como
+    // fragmento de #contenido-modal (la app de chat del paciente, con su
+    // propio layout/CSS/JS de PWA) — en vez de extraer un fragmento, carga
+    // la URL entera en un <iframe> dentro de un modal con forma de teléfono.
+    // Pensado para que una sola persona pueda probar la app haciendo de
+    // usuario y de paciente a la vez, sin salir de la pestaña del admin. ----
+    function iniciarModalesIframe() {
+        var dialogo = document.getElementById("dialog-modal-iframe");
+        if (!dialogo) return;
+        var tituloEl = document.getElementById("dialog-modal-iframe-titulo");
+        var frame = document.getElementById("dialog-modal-iframe-frame");
+
+        document.addEventListener("click", function (ev) {
+            var link = ev.target.closest("a[data-modal-iframe]");
+            if (!link) return;
+            ev.preventDefault();
+            tituloEl.textContent = link.dataset.modalIframe || "WhatsApp";
+            frame.src = link.getAttribute("href");
+            dialogo.showModal();
+        });
+
+        // Al cerrar, descarga el iframe (about:blank) para no dejar corriendo
+        // de fondo el polling de mensajes nuevos de chat.js.
+        dialogo.addEventListener("close", function () {
+            frame.src = "about:blank";
         });
     }
 

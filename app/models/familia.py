@@ -14,9 +14,16 @@ class Familia(Base):
     fecha_alta: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # Cuál de las API keys guardadas en api_keys (FamiliaApiKey) es la que se
+    # usa de verdad para las llamadas a la IA de esta familia. None hasta que
+    # un admin elija una — ver ia_cliente.generar_texto.
+    proveedor_ia_activo: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     memberships: Mapped[list["FamiliaMembership"]] = relationship(
         "FamiliaMembership", back_populates="familia", cascade="all, delete-orphan"
+    )
+    api_keys: Mapped[list["FamiliaApiKey"]] = relationship(
+        "FamiliaApiKey", back_populates="familia", cascade="all, delete-orphan"
     )
     # passive_deletes=True: al borrar una Familia, dejar que el
     # ondelete=CASCADE de la FK haga el borrado en la base — sin esto,

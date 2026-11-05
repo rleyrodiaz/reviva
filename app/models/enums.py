@@ -62,3 +62,7 @@ class AccionActividad(str, enum.Enum):
     db_reset_parcial = "db_reset_parcial"
     db_reset_total = "db_reset_total"
     ia_sin_saldo = "ia_sin_saldo"
+    ia_sin_api_key = "ia_sin_api_key"
+    api_key_guardada = "api_key_guardada"
+    api_key_borrada = "api_key_borrada"
+    ia_proveedor_cambiado = "ia_proveedor_cambiado"

@@ -167,7 +167,7 @@ def test_registrar_respuesta_libre_con_match_avanza_a_esa_rama(db, escenario, mo
 
     monkeypatch.setattr(
         motor, "clasificar_respuesta",
-        lambda pregunta, texto, ramas: ResultadoClasificacion(rama_id=rama_recuerda.id, confianza=0.9),
+        lambda pregunta, texto, ramas, **kwargs: ResultadoClasificacion(rama_id=rama_recuerda.id, confianza=0.9),
     )
     monkeypatch.setattr(
         motor, "adaptar_mensaje_guion",
@@ -210,7 +210,7 @@ def test_registrar_respuesta_libre_destino_entrada_manual_no_se_adapta_ni_se_man
 
     monkeypatch.setattr(
         motor, "clasificar_respuesta",
-        lambda pregunta, texto, ramas: ResultadoClasificacion(rama_id=rama.id, confianza=0.9),
+        lambda pregunta, texto, ramas, **kwargs: ResultadoClasificacion(rama_id=rama.id, confianza=0.9),
     )
     def _no_debería_llamarse(*a, **kw):
         raise AssertionError("un destino de entrada manual no debería pasar por la IA")
@@ -241,7 +241,7 @@ def test_registrar_respuesta_libre_sin_match_dispara_fallback(db, escenario, mon
 
     monkeypatch.setattr(
         motor, "clasificar_respuesta",
-        lambda pregunta, texto, ramas: ResultadoClasificacion(rama_id=None, confianza=0.0),
+        lambda pregunta, texto, ramas, **kwargs: ResultadoClasificacion(rama_id=None, confianza=0.0),
     )
     def _no_debería_llamarse(*a, **kw):
         raise AssertionError("un fallback CON destino armado no debería generar un cierre con IA")
@@ -270,7 +270,7 @@ def test_registrar_respuesta_libre_baja_confianza_tambien_cae_en_fallback(db, es
 
     monkeypatch.setattr(
         motor, "clasificar_respuesta",
-        lambda pregunta, texto, ramas: ResultadoClasificacion(rama_id=rama_recuerda.id, confianza=0.2),
+        lambda pregunta, texto, ramas, **kwargs: ResultadoClasificacion(rama_id=rama_recuerda.id, confianza=0.2),
     )
     monkeypatch.setattr(motor, "generar_cierre", lambda anterior, texto, personaje: "Un cierre cualquiera")
 
@@ -292,7 +292,7 @@ def test_registrar_respuesta_libre_sin_fallback_configurado_falla(db, escenario,
 
     monkeypatch.setattr(
         motor, "clasificar_respuesta",
-        lambda pregunta, texto, ramas: ResultadoClasificacion(rama_id=None, confianza=0.0),
+        lambda pregunta, texto, ramas, **kwargs: ResultadoClasificacion(rama_id=None, confianza=0.0),
     )
 
     with pytest.raises(ValueError):

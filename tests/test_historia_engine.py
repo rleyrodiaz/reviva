@@ -196,6 +196,33 @@ def test_registrar_respuesta_fuerza_cierre_al_pasarse_del_tiempo_aunque_la_ia_di
     assert sesion.estado == EstadoHistoriaSesion.finalizada
 
 
+def test_mensajes_mantienen_orden_real_aunque_el_creado_en_quede_igual(db, escenario):
+    """server_default=func.now() devuelve el mismo valor para dos inserts de
+    la misma transacción (el mensaje del paciente y la respuesta generada en
+    el mismo registrar_respuesta) — si el orden de sesion.mensajes dependiera
+    de creado_en en vez de id, un empate podría mostrar la respuesta ANTES
+    de la pregunta que la originó, tanto en el chat como en la transcripción
+    que lee la IA para decidir el próximo mensaje (eso rompía las Historias:
+    la IA veía una charla desordenada y cerraba o contestaba sin sentido)."""
+    with patch.object(historia_engine, "generar_texto", return_value='{"mensaje": "Hola!", "cerrar": false}'):
+        sesion = historia_engine.iniciar_sesion(db, escenario["historia"], escenario["paciente"].id)
+
+    with _SIN_HECHOS, patch.object(
+        historia_engine, "generar_texto", return_value='{"mensaje": "Todo bien!", "cerrar": false}',
+    ):
+        historia_engine.registrar_respuesta(db, sesion, "Todo bien, ¿y vos?")
+
+    # Forzamos el empate que el motor real produce (mismo creado_en para el
+    # mensaje del paciente y la respuesta que generó en esa misma llamada).
+    sesion.mensajes[1].creado_en = sesion.mensajes[2].creado_en
+    db.flush()
+    db.expire(sesion)
+
+    assert [m.id for m in sesion.mensajes] == sorted(m.id for m in sesion.mensajes)
+    assert sesion.mensajes[1].texto == "Todo bien, ¿y vos?"
+    assert sesion.mensajes[2].texto == "Todo bien!"
+
+
 def test_registrar_respuesta_no_fuerza_cierre_si_todavia_no_paso_el_tiempo(db, escenario):
     with patch.object(historia_engine, "generar_texto", return_value='{"mensaje": "Hola!", "cerrar": false}'):
         sesion = historia_engine.iniciar_sesion(db, escenario["historia"], escenario["paciente"].id)

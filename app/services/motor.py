@@ -162,7 +162,8 @@ def registrar_respuesta_libre(
     guion = interaccion.guion
     ramas = [r for r in guion.ramas_libres if not r.es_fallback]
     resultado = clasificar_respuesta(
-        guion.texto_mensaje, texto_respuesta, [(r.id, r.criterio) for r in ramas]
+        guion.texto_mensaje, texto_respuesta, [(r.id, r.criterio) for r in ramas],
+        familia_id=guion.personaje.familia_id,
     )
 
     rama_elegida = None

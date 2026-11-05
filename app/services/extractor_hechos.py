@@ -41,7 +41,7 @@ def extraer_hechos_nuevos(historia: Historia, mensajes: list[HistoriaMensaje]) -
     if not prompt:
         return []
 
-    raw = generar_texto(prompt, max_tokens=300)
+    raw = generar_texto(prompt, max_tokens=300, familia_id=historia.personaje.familia_id)
     if raw is None:
         return []
 

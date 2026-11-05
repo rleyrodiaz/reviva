@@ -2,6 +2,7 @@
 {% block title %}Settings global{% endblock %}
 {% block contenido %}
 <p><a href="/admin/familias">&larr; volver</a></p>
+<div id="contenido-modal">
 <h2>Settings global</h2>
 <p class="hint">Esto afecta a toda la app, todas las familias a la vez — el reset acotado a una familia puntual vive dentro de cada familia (Admin → Settings).</p>
 
@@ -26,16 +27,12 @@
         conversaciones, guiones, pacientes y usuarios ({{ stats.get('usuarios', 0) }}) — y recrea el esquema vacío.
     </p>
     <p class="hint">Tu cuenta sigue existiendo (mismo email y contraseña) como único superadmin; el resto de los usuarios pierde el acceso.</p>
-    <form method="post" action="/admin/settings/reset" id="form-reset-total">
+    <form method="post" action="/admin/settings/reset" id="form-reset-total" data-cerrar-y-recargar="true">
         <label for="confirm-input">Escribí <code>RESET</code> para confirmar</label>
-        <input type="text" id="confirm-input" name="confirm" autocomplete="off" placeholder="RESET" style="max-width:220px;">
+        <input type="text" id="confirm-input" name="confirm" autocomplete="off" placeholder="RESET" style="max-width:220px;"
+               data-confirma-escribiendo="RESET" data-habilita-boton="btn-reset-total">
         <button id="btn-reset-total" class="btn danger" type="submit" disabled>Resetear todo</button>
     </form>
 </div>
-
-<script>
-document.getElementById('confirm-input').addEventListener('input', function () {
-    document.getElementById('btn-reset-total').disabled = this.value !== 'RESET';
-});
-</script>
+</div>
 {% endblock %}

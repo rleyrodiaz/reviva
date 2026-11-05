@@ -36,7 +36,11 @@ def adaptar_mensaje_guion(texto_base: str, transcripcion: str, personaje: Person
     viejo (ver respuesta_guion._armar_prompt). Ante cualquier falla (sin API
     key, error de red, parseo) se manda el texto preparado tal cual — nunca
     se bloquea el envío por esto."""
-    texto = generar_texto(_armar_prompt(texto_base, transcripcion, personaje), max_tokens=250)
+    texto = generar_texto(
+        _armar_prompt(texto_base, transcripcion, personaje),
+        max_tokens=250,
+        familia_id=personaje.familia_id,
+    )
     if texto is None:
         return texto_base
     texto = texto.strip().strip('"')

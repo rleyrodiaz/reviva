@@ -189,6 +189,24 @@ h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
 .dropdown-menu a.activo { color: var(--accent); font-weight: 600; }
 .dropdown-divider { height: 1px; background: var(--rule); margin: 4px 2px; }
 
+/* ---------- Settings: pantalla índice (reemplaza al viejo dropdown "Admin
+   ▾") — grilla de cards que abren su contenido en un modal (mismo patrón
+   que Bandeja/Hechos, ver data-modal-titulo en dialogos.js). Una columna
+   en mobile, más columnas a medida que hay lugar. ---------- */
+.settings-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px;
+}
+.settings-card {
+    display: block; background: var(--paper-raised); border: 1px solid var(--rule);
+    border-radius: 12px; box-shadow: var(--shadow); padding: 20px; color: var(--ink);
+    text-decoration: none; transition: border-color .15s ease;
+}
+.settings-card:hover { border-color: var(--accent); text-decoration: none; }
+.settings-card-title {
+    font-weight: 600; color: var(--accent); margin-bottom: 6px; font-size: 1rem;
+}
+.settings-card-desc { font-size: 0.8rem; color: var(--ink-soft); line-height: 1.45; }
+
 .familia-pill {
     display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--font-body);
     font-weight: 500; color: var(--accent); background: transparent;
@@ -260,6 +278,30 @@ dialog::backdrop { background: rgba(20, 16, 10, 0.5); }
 dialog h2 { margin-bottom: 4px; padding-right: 30px; cursor: move; user-select: none; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 dialog.modal-ancho { width: min(760px, 94vw); }
+/* Modo demo: el chat del paciente adentro de un modal con forma de
+   teléfono, en vez de una pestaña nueva (ver MODO_DEMO / data-modal-iframe
+   en dialogos.js). */
+dialog.modal-telefono {
+    width: min(390px, 92vw);
+    height: min(760px, 88vh);
+    padding: 0;
+    overflow: hidden;
+    border-radius: 24px;
+}
+/* display:flex solo cuando está realmente abierto ([open], lo pone el
+   navegador con showModal()) — puesto sin condición pisa el display:none
+   por defecto de <dialog> y queda visible todo el tiempo, sin que la X ni
+   el arrastre funcionen (ambos dependen de dialogo.open). */
+dialog.modal-telefono[open] { display: flex; flex-direction: column; }
+dialog.modal-telefono h2 {
+    margin: 0;
+    padding: 14px 40px 14px 16px;
+    font-size: 1rem;
+    background: var(--paper-sunken);
+    border-bottom: 1px solid var(--rule);
+    flex-shrink: 0;
+}
+dialog.modal-telefono iframe { flex: 1; border: none; width: 100%; }
 .modal-cerrar-x {
     position: absolute; top: 14px; right: 14px; width: 26px; height: 26px;
     display: flex; align-items: center; justify-content: center;

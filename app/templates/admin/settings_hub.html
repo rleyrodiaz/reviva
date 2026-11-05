@@ -1,0 +1,27 @@
+{% extends "admin/admin_base.html" %}
+{% block title %}Settings — {{ familia.nombre }}{% endblock %}
+{% block contenido %}
+<p><a href="/admin/familias/{{ familia.id }}">&larr; {{ familia.nombre }}</a></p>
+<h1>Settings</h1>
+
+<div class="settings-grid">
+    <a class="settings-card" href="/admin/familias/{{ familia.id }}/activity-log" data-modal-titulo="Activity log">
+        <div class="settings-card-title">Activity log</div>
+        <div class="settings-card-desc">Quién hizo qué, y cuándo, en {{ familia.nombre }}.</div>
+    </a>
+    <a class="settings-card" href="/admin/familias/{{ familia.id }}/settings/api-keys" data-modal-titulo="API Keys">
+        <div class="settings-card-title">API Keys</div>
+        <div class="settings-card-desc">La API key de IA de {{ familia.nombre }}, por proveedor.</div>
+    </a>
+    {% if user.es_superadmin %}
+    <a class="settings-card" href="/admin/familias/{{ familia.id }}/settings/base-datos" data-modal-titulo="Settings de base de datos">
+        <div class="settings-card-title">Settings de base de datos</div>
+        <div class="settings-card-desc">Regenerar datos generados por el uso, acotado a {{ familia.nombre }}.</div>
+    </a>
+    <a class="settings-card" href="/admin/settings" data-modal-titulo="Settings de base de datos — global">
+        <div class="settings-card-title">Settings de base de datos — global</div>
+        <div class="settings-card-desc">Inicializar o resetear TODO el sistema. Afecta a todas las familias.</div>
+    </a>
+    {% endif %}
+</div>
+{% endblock %}

@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import get_settings
 from app.db import Base, engine, get_db_dep
 from app.models.activity_log import ActivityLog
 from app.models.conversacion import Conversacion
@@ -20,6 +21,7 @@ from app.models.enums import (
     UserRole,
 )
 from app.models.familia import Familia
+from app.models.familia_api_key import FamiliaApiKey
 from app.models.familia_membership import FamiliaMembership
 from app.models.guion import Guion
 from app.models.hecho_familiar import HechoFamiliar
@@ -43,7 +45,9 @@ from app.services.auth import (
     require_superadmin,
     require_user,
 )
+from app.services.cifrado import cifrar_api_key, descifrar_api_key
 from app.services.familias import contadores_pendientes, es_admin_de, familias_navbar, list_familias_propias
+from app.services.ia_cliente import PROVEEDORES_DISPONIBLES
 from app.services.importador_historia import extraer_texto_archivo
 
 router = APIRouter(prefix="/admin")
@@ -53,6 +57,7 @@ templates.env.globals["es_admin_de"] = es_admin_de
 templates.env.globals["familias_navbar"] = familias_navbar
 templates.env.globals["contadores_pendientes"] = contadores_pendientes
 templates.env.globals["mensaje_requiere_admin"] = MENSAJE_REQUIERE_ADMIN
+templates.env.globals["modo_demo"] = get_settings().modo_demo
 
 
 def _paciente_de_familia(db: Session, familia_id: int) -> Paciente | None:
@@ -62,6 +67,20 @@ def _paciente_de_familia(db: Session, familia_id: int) -> Paciente | None:
 
 def _url_conversacion(familia_id: int, personaje_id: int, conversacion_id: int) -> str:
     return f"/admin/familias/{familia_id}/personajes/{personaje_id}/conversaciones/{conversacion_id}"
+
+
+def _url_con_chat_disparado(url: str, personaje_id: int, paciente_id: int) -> str:
+    """En MODO_DEMO, agrega ?chat_disparado=<personaje_id>&chat_disparado_paciente=<paciente_id>
+    a la URL de vuelta tras aprobar/disparar un guion o una historia (lo
+    que de verdad manda un mensaje al paciente) — admin_base.html lee esos
+    dos query params en CUALQUIER página (sin que cada ruta tenga que
+    pasarlos por contexto) y abre sola la ventana de WhatsApp, directo a la
+    conversación con ese personaje, sin pasar por la lista de contactos
+    (ver data-modal-iframe en dialogos.js). En uso real no hace nada."""
+    if not get_settings().modo_demo:
+        return url
+    separador = "&" if "?" in url else "?"
+    return f"{url}{separador}chat_disparado={personaje_id}&chat_disparado_paciente={paciente_id}"
 
 
 def _url_personaje(familia_id: int, personaje_id: int) -> str:
@@ -112,6 +131,7 @@ def _guiones_huerfanos(db: Session, guiones: list[Guion]) -> set[int]:
 # la fecha real). Un valor lejano evita que el scheduler los dispare antes
 # de ser alcanzados.
 FECHA_SIN_PROGRAMAR = datetime(2099, 1, 1)
+AÑO_SIN_PROGRAMAR = FECHA_SIN_PROGRAMAR.year
 
 
 def _datos_diagrama(guiones: list[Guion], huerfanos: set[int]) -> str:
@@ -775,14 +795,14 @@ def proponer_historia(
     la fecha) arranca directo, sin pasar por la bandeja — como el
     scheduler mismo haría."""
     historia = db.get(Historia, historia_id)
+    destino = f"/admin/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}"
     if historia.modo_envio == ModoEnvio.manual:
         historia_engine.proponer(db, historia)
     else:
         paciente = _paciente_de_familia(db, familia_id)
         historia_engine.iniciar_sesion(db, historia, paciente.id)
-    return RedirectResponse(
-        f"/admin/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}", status_code=303
-    )
+        destino = _url_con_chat_disparado(destino, personaje_id, paciente.id)
+    return RedirectResponse(destino, status_code=303)
 
 
 @router.post("/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}/bandeja/aprobar")
@@ -795,6 +815,7 @@ def aprobar_historia_desde_bandeja(
     db: Session = Depends(get_db_dep),
 ):
     historia = db.get(Historia, historia_id)
+    destino = f"/admin/familias/{familia_id}/bandeja"
     if historia.mensaje_propuesto is not None:
         paciente = _paciente_de_familia(db, familia_id)
         historia_engine.aprobar_propuesta(db, historia, paciente.id, mensaje.strip())
@@ -802,7 +823,8 @@ def aprobar_historia_desde_bandeja(
             db, AccionActividad.historia_aprobada, usuario_id=user.id, familia_id=familia_id,
             target_type="historia", target_id=historia_id,
         )
-    return RedirectResponse(f"/admin/familias/{familia_id}/bandeja", status_code=303)
+        destino = _url_con_chat_disparado(destino, historia.personaje_id, paciente.id)
+    return RedirectResponse(destino, status_code=303)
 
 
 @router.post("/familias/{familia_id}/personajes/{personaje_id}/historias/{historia_id}/bandeja/desactivar")
@@ -851,7 +873,12 @@ def detalle_conversacion(
     huerfanos = _guiones_huerfanos(db, guiones)
     guion_entrada = next((g for g in guiones if g.es_entrada), None)
     fecha_entrada_valor = ""
-    if guion_entrada is not None and guion_entrada.fecha_programada != FECHA_SIN_PROGRAMAR:
+    # Por año, no por igualdad exacta: lo que se guardó como "sin programar"
+    # sale de un naive de Python escrito en una columna tz-aware, así que
+    # vuelve con el offset de la sesión de DB (ej. "2099-01-01 00:00:00-03:00")
+    # y nunca es `==` a un FECHA_SIN_PROGRAMAR armado de nuevo acá — comparar
+    # por año evita ese lío de huso horario.
+    if guion_entrada is not None and guion_entrada.fecha_programada.year != AÑO_SIN_PROGRAMAR:
         fecha_entrada_valor = guion_entrada.fecha_programada.strftime("%Y-%m-%dT%H:%M")
     return templates.TemplateResponse(
         "admin/conversacion_detail.html",
@@ -1317,6 +1344,7 @@ def aprobar_desde_bandeja(
     db: Session = Depends(get_db_dep),
 ):
     guion = db.get(Guion, guion_id)
+    destino = f"/admin/familias/{familia_id}/bandeja"
     if guion.estado == EstadoGuion.pendiente_aprobacion:
         # Si ya no está pendiente (doble click, otra pestaña, el scheduler
         # llegó primero) no hay nada que aprobar — evitamos el 500 y
@@ -1328,7 +1356,8 @@ def aprobar_desde_bandeja(
             db, AccionActividad.guion_aprobado, usuario_id=user.id, familia_id=familia_id,
             target_type="guion", target_id=guion_id,
         )
-    return RedirectResponse(f"/admin/familias/{familia_id}/bandeja", status_code=303)
+        destino = _url_con_chat_disparado(destino, guion.personaje_id, paciente.id)
+    return RedirectResponse(destino, status_code=303)
 
 
 @router.post("/familias/{familia_id}/bandeja/{guion_id}/desactivar")
@@ -1503,6 +1532,10 @@ ACCION_LABELS = {
     "db_reset_parcial": "Reset parcial de datos",
     "db_reset_total": "Reset total",
     "ia_sin_saldo": "Sin saldo de IA",
+    "ia_sin_api_key": "Sin API key de IA",
+    "api_key_guardada": "API key guardada",
+    "api_key_borrada": "API key borrada",
+    "ia_proveedor_cambiado": "Proveedor de IA cambiado",
 }
 
 ACTIVITY_LOG_PAGE_SIZE = 50
@@ -1658,10 +1691,28 @@ RESET_DELETE_ORDER = ["interacciones", "historias_sesiones", "hechos", "push", "
 
 
 @router.get("/familias/{familia_id}/settings", response_class=HTMLResponse)
-def settings_page(
+def settings_hub_page(
     familia_id: int,
     request: Request,
     user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    """Pantalla índice de Settings: reemplaza al viejo dropdown "Admin ▾" del
+    nav. Un admin_familia (no superadmin) solo ve Activity Log y API Keys —
+    Settings de base de datos (acá y la global) quedan reservadas a
+    superadmin, a diferencia del resto de lo que puede hacer un admin_familia."""
+    familia = db.get(Familia, familia_id)
+    return templates.TemplateResponse(
+        "admin/settings_hub.html",
+        {"request": request, "user": user, "familia": familia},
+    )
+
+
+@router.get("/familias/{familia_id}/settings/base-datos", response_class=HTMLResponse)
+def settings_base_datos_page(
+    familia_id: int,
+    request: Request,
+    user: Usuario = Depends(require_superadmin),
     db: Session = Depends(get_db_dep),
     msg: str = "",
 ):
@@ -1671,7 +1722,7 @@ def settings_page(
         for key, cfg in RESET_TABLES.items()
     }
     return templates.TemplateResponse(
-        "admin/settings.html",
+        "admin/settings_base_datos.html",
         {
             "request": request,
             "user": user,
@@ -1683,20 +1734,21 @@ def settings_page(
     )
 
 
-@router.post("/familias/{familia_id}/settings/reset-tables")
+@router.post("/familias/{familia_id}/settings/base-datos/reset-tables")
 def settings_reset_tables(
     familia_id: int,
-    user: Usuario = Depends(require_admin_familia),
+    user: Usuario = Depends(require_superadmin),
     db: Session = Depends(get_db_dep),
     confirm: str = Form(""),
     tables: list[str] = Form(default=[]),
 ):
+    base_url = f"/admin/familias/{familia_id}/settings/base-datos"
     if confirm.strip() != "BORRAR":
-        return RedirectResponse(f"/admin/familias/{familia_id}/settings?msg=confirm_error", status_code=303)
+        return RedirectResponse(f"{base_url}?msg=confirm_error", status_code=303)
 
     selected = [key for key in RESET_DELETE_ORDER if key in tables and key in RESET_TABLES]
     if not selected:
-        return RedirectResponse(f"/admin/familias/{familia_id}/settings?msg=no_selection", status_code=303)
+        return RedirectResponse(f"{base_url}?msg=no_selection", status_code=303)
 
     for key in selected:
         cfg = RESET_TABLES[key]
@@ -1706,7 +1758,136 @@ def settings_reset_tables(
         db, AccionActividad.db_reset_parcial, usuario_id=user.id, familia_id=familia_id,
         detalle=f"tablas={selected}",
     )
-    return RedirectResponse(f"/admin/familias/{familia_id}/settings?msg=reset_tables_ok", status_code=303)
+    return RedirectResponse(f"{base_url}?msg=reset_tables_ok", status_code=303)
+
+
+# ---------- Settings > API Keys (por familia): la key de IA de cada
+# proveedor la carga la propia familia en vez de depender de la key global
+# de .env — ver app/services/ia_cliente.py. ----------
+
+def _mascara_api_key(api_key_cifrada: str) -> str:
+    try:
+        plano = descifrar_api_key(api_key_cifrada)
+    except Exception:
+        return "••••••••"
+    return f"••••{plano[-4:]}" if len(plano) > 4 else "••••"
+
+
+@router.get("/familias/{familia_id}/settings/api-keys", response_class=HTMLResponse)
+def settings_api_keys_page(
+    familia_id: int,
+    request: Request,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+    msg: str = "",
+):
+    familia = db.get(Familia, familia_id)
+    keys = db.scalars(
+        select(FamiliaApiKey).where(FamiliaApiKey.familia_id == familia_id).order_by(FamiliaApiKey.proveedor)
+    ).all()
+    proveedores_configurados = {k.proveedor for k in keys}
+    return templates.TemplateResponse(
+        "admin/settings_api_keys.html",
+        {
+            "request": request,
+            "user": user,
+            "familia": familia,
+            "msg": msg,
+            "keys": keys,
+            "mascara": {k.id: _mascara_api_key(k.api_key_cifrada) for k in keys},
+            "proveedores_disponibles": PROVEEDORES_DISPONIBLES,
+            "proveedores_configurados": proveedores_configurados,
+        },
+    )
+
+
+@router.post("/familias/{familia_id}/settings/api-keys")
+def guardar_api_key_familia(
+    familia_id: int,
+    proveedor: str = Form(...),
+    api_key: str = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    proveedor = proveedor.strip().lower()
+    if proveedor not in PROVEEDORES_DISPONIBLES:
+        raise HTTPException(status_code=400, detail="Proveedor no reconocido.")
+    if not api_key.strip():
+        raise HTTPException(status_code=400, detail="Falta la API key.")
+
+    fila = db.scalar(
+        select(FamiliaApiKey).where(
+            FamiliaApiKey.familia_id == familia_id, FamiliaApiKey.proveedor == proveedor
+        )
+    )
+    es_nueva = fila is None
+    if fila is None:
+        fila = FamiliaApiKey(familia_id=familia_id, proveedor=proveedor, api_key_cifrada="")
+        db.add(fila)
+    fila.api_key_cifrada = cifrar_api_key(api_key.strip())
+
+    # La primera key que carga la familia pasa a ser la activa de una, así
+    # no queda un proveedor configurado pero sin usarse por olvido.
+    familia = db.get(Familia, familia_id)
+    if not familia.proveedor_ia_activo:
+        familia.proveedor_ia_activo = proveedor
+
+    db.flush()
+    registrar_actividad(
+        db, AccionActividad.api_key_guardada, usuario_id=user.id, familia_id=familia_id,
+        target_type="familia_api_key", target_id=fila.id,
+        detalle=f"proveedor={proveedor} nueva={es_nueva}",
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/settings/api-keys?msg=guardada_ok", status_code=303)
+
+
+@router.post("/familias/{familia_id}/settings/api-keys/activo")
+def elegir_proveedor_activo_familia(
+    familia_id: int,
+    proveedor: str = Form(...),
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    proveedor = proveedor.strip().lower()
+    tiene_key = db.scalar(
+        select(FamiliaApiKey.id).where(
+            FamiliaApiKey.familia_id == familia_id, FamiliaApiKey.proveedor == proveedor
+        )
+    )
+    if tiene_key is None:
+        raise HTTPException(status_code=400, detail="Esa familia no tiene una API key cargada para ese proveedor.")
+
+    familia = db.get(Familia, familia_id)
+    familia.proveedor_ia_activo = proveedor
+    registrar_actividad(
+        db, AccionActividad.ia_proveedor_cambiado, usuario_id=user.id, familia_id=familia_id,
+        detalle=f"proveedor={proveedor}",
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/settings/api-keys", status_code=303)
+
+
+@router.post("/familias/{familia_id}/settings/api-keys/{key_id}/borrar")
+def borrar_api_key_familia(
+    familia_id: int,
+    key_id: int,
+    user: Usuario = Depends(require_admin_familia),
+    db: Session = Depends(get_db_dep),
+):
+    fila = db.get(FamiliaApiKey, key_id)
+    if fila is None or fila.familia_id != familia_id:
+        raise HTTPException(status_code=404, detail="No encontrado")
+
+    proveedor = fila.proveedor
+    db.delete(fila)
+    familia = db.get(Familia, familia_id)
+    if familia.proveedor_ia_activo == proveedor:
+        familia.proveedor_ia_activo = None
+    db.flush()
+    registrar_actividad(
+        db, AccionActividad.api_key_borrada, usuario_id=user.id, familia_id=familia_id,
+        detalle=f"proveedor={proveedor}",
+    )
+    return RedirectResponse(f"/admin/familias/{familia_id}/settings/api-keys", status_code=303)
 
 
 # ---------- Settings global (solo superadmin): inicializar/resetear TODO el sistema ----------

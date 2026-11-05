@@ -7,7 +7,6 @@
     <h1>{{ conversacion.nombre }}</h1>
     <div style="display:flex; gap:8px;">
         <button class="btn chico secundario" type="button" onclick="document.getElementById('modal-traer-guion').showModal()">Traer nodo de otra conversación</button>
-        <button class="btn chico" type="button" onclick="document.getElementById('modal-nuevo-guion').showModal()">+ Nuevo nodo</button>
     </div>
 </div>
 
@@ -28,21 +27,6 @@
         <div class="modal-actions">
             <button type="button" class="btn quiet" onclick="document.getElementById('modal-traer-guion').close()">Cancelar</button>
             <button class="btn" type="submit">Traer copia</button>
-        </div>
-    </form>
-</dialog>
-
-<dialog id="modal-nuevo-guion">
-    <h2>Nuevo nodo</h2>
-    <form method="post"
-          action="/admin/familias/{{ familia_id }}/personajes/{{ personaje.id }}/conversaciones/{{ conversacion.id }}/guiones">
-        <input type="hidden" name="pos_x" id="modal-nuevo-guion-pos-x">
-        <input type="hidden" name="pos_y" id="modal-nuevo-guion-pos-y">
-        <label>Mensaje</label>
-        <textarea name="texto_mensaje" rows="2" required></textarea>
-        <div class="modal-actions">
-            <button type="button" class="btn quiet" onclick="document.getElementById('modal-nuevo-guion').close()">Cancelar</button>
-            <button class="btn" type="submit">Crear nodo</button>
         </div>
     </form>
 </dialog>
@@ -92,7 +76,16 @@
             fecha.classList.toggle("campo-apagado", esManual);
             fecha.title = esManual ? "En modo manual la fecha no participa del envío." : "";
         }
-        modo.addEventListener("change", actualizar);
+        modo.addEventListener("change", function () {
+            // Al pasar a automático sin una fecha ya elegida, arrancamos
+            // con la de hoy en vez de dejarlo en blanco (antes se filtraba
+            // ahí el 01/01/2099 que usan internamente los nodos sin fecha).
+            if (modo.value === "automatico" && !fecha.value) {
+                var ahora = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+                fecha.value = ahora.toISOString().slice(0, 16);
+            }
+            actualizar();
+        });
         actualizar();
     })();
     </script>

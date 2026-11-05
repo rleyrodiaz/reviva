@@ -37,5 +37,11 @@ class HistoriaSesion(Base):
         "HistoriaMensaje",
         back_populates="sesion",
         cascade="all, delete-orphan",
-        order_by="HistoriaMensaje.creado_en",
+        # Por id, no por creado_en: el mensaje del paciente y la respuesta
+        # del personaje generada en la misma llamada se insertan en la misma
+        # transacción, y server_default=func.now() devuelve el mismo valor
+        # para ambos — ordenar por creado_en los deja en orden arbitrario
+        # (afecta tanto el chat como, más grave, la transcripción que se le
+        # manda a la IA para decidir el próximo mensaje).
+        order_by="HistoriaMensaje.id",
     )
