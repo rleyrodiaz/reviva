@@ -284,15 +284,22 @@ dialog.modal-ancho { width: min(760px, 94vw); }
 dialog.modal-telefono {
     width: min(390px, 92vw);
     height: min(760px, 88vh);
+    min-width: 280px;
+    min-height: 320px;
+    max-width: 96vw;
+    max-height: 94vh;
     padding: 0;
-    overflow: hidden;
+    overflow: auto;
     border-radius: 24px;
 }
 /* display:flex solo cuando está realmente abierto ([open], lo pone el
    navegador con showModal()) — puesto sin condición pisa el display:none
    por defecto de <dialog> y queda visible todo el tiempo, sin que la X ni
-   el arrastre funcionen (ambos dependen de dialogo.open). */
-dialog.modal-telefono[open] { display: flex; flex-direction: column; }
+   el arrastre funcionen (ambos dependen de dialogo.open). resize:both
+   agrega el "agarre" de la esquina inferior derecha para cambiar ancho y
+   alto a mano — necesita overflow distinto de "visible" para que el
+   navegador lo dibuje. */
+dialog.modal-telefono[open] { display: flex; flex-direction: column; resize: both; }
 dialog.modal-telefono h2 {
     margin: 0;
     padding: 14px 40px 14px 16px;
