@@ -1571,9 +1571,10 @@ def activity_log_page(
         .order_by(ActivityLog.creado_en.desc())
     ).unique().all()
     # La actividad del superadmin (tareas técnicas: resets, settings, etc.)
-    # no es relevante para ninguna familia y no debe aparecer en su log ni
-    # en el filtro de usuario, sin importar quién lo esté mirando.
-    all_entries = [e for e in all_entries if not (e.usuario and e.usuario.es_superadmin)]
+    # no es relevante para la familia — se le oculta a admin_familia/familiar,
+    # pero el superadmin sigue viendo la suya cuando es él quien mira el log.
+    if not user.es_superadmin:
+        all_entries = [e for e in all_entries if not (e.usuario and e.usuario.es_superadmin)]
 
     all_target_types = sorted({e.target_type for e in all_entries if e.target_type})
     all_usuarios: dict[int, Usuario] = {}
